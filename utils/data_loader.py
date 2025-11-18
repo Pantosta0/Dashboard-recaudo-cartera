@@ -4,6 +4,16 @@ from pathlib import Path
 from datetime import datetime
 import os
 import re
+import locale
+
+# Configurar locale para español (meses en español)
+try:
+    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
+    except:
+        pass  # Si no se puede configurar, usar inglés
 
 # Configuración de directorios
 DATA_DIR = Path("data")
@@ -54,6 +64,8 @@ def load_excel_with_cache(excel_path, cache_dir, processing_func=None, **read_ex
     if is_cache_valid(excel_path, cache_path):
         try:
             df = pd.read_parquet(cache_path)
+            # Convertir columnas que fueron guardadas como string de vuelta a su tipo original si es necesario
+            # (esto se manejará en la función de procesamiento)
             if processing_func:
                 df = processing_func(df)
             return df
@@ -70,9 +82,39 @@ def load_excel_with_cache(excel_path, cache_dir, processing_func=None, **read_ex
         
         # Guardar en caché
         try:
-            df.to_parquet(cache_path, index=False, compression='snappy')
+            # Asegurar que las columnas de tipo object (strings) se mantengan como strings
+            # Parquet puede tener problemas con columnas object que pandas intenta convertir
+            df_for_cache = df.copy()
+            for col in df_for_cache.columns:
+                if df_for_cache[col].dtype == 'object':
+                    # Convertir a string explícitamente, manteniendo NaN como NaN
+                    # Usar convert_dtypes para preservar tipos pero asegurar que object sea string
+                    df_for_cache[col] = df_for_cache[col].astype('string')  # StringDtype de pandas
+            
+            # Guardar en Parquet con pyarrow que maneja mejor los tipos de datos
+            df_for_cache.to_parquet(
+                cache_path, 
+                index=False, 
+                compression='snappy',
+                engine='pyarrow'
+            )
         except Exception as e:
-            st.warning(f"No se pudo guardar el caché: {e}")
+            # Si falla con string dtype, intentar con conversión más simple
+            try:
+                df_for_cache = df.copy()
+                for col in df_for_cache.columns:
+                    if df_for_cache[col].dtype == 'object':
+                        # Convertir a string, reemplazando NaN con string vacío
+                        df_for_cache[col] = df_for_cache[col].fillna('').astype(str)
+                
+                df_for_cache.to_parquet(
+                    cache_path, 
+                    index=False, 
+                    compression='snappy',
+                    engine='pyarrow'
+                )
+            except Exception as e2:
+                st.warning(f"No se pudo guardar el caché: {e2}")
         
         return df
     except Exception as e:
@@ -81,11 +123,11 @@ def load_excel_with_cache(excel_path, cache_dir, processing_func=None, **read_ex
 
 def parse_filename_date(filename):
     """
-    Extrae año y mes del nombre de archivo con patrón: nombre-YYYY-MM.xlsx
+    Extrae año y mes del nombre de archivo con patrón: nombre-YYYY-MM.xlsx o nombre-YYYY-M.xlsx
     Retorna (año, mes) o None si no coincide
     """
-    # Patrón: nombre-YYYY-MM.xlsx
-    pattern = r'(\d{4})-(\d{2})'
+    # Patrón: nombre-YYYY-MM.xlsx o nombre-YYYY-M.xlsx (acepta 1 o 2 dígitos para el mes)
+    pattern = r'(\d{4})-(\d{1,2})'
     match = re.search(pattern, filename.stem)
     
     if match:
@@ -102,15 +144,25 @@ def detect_cartera_files():
     Retorna lista de tuplas (mes_str, año, mes_num, archivo_path)
     """
     files = []
+    meses_es = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+               'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
     
     # Buscar en el directorio de cartera/raw
-    pattern_files = get_excel_files(CARTERA_RAW_DIR, "cartera-*.xlsx")
-    for file in pattern_files:
-        date_info = parse_filename_date(file)
-        if date_info:
-            año, mes = date_info
-            mes_str = datetime(año, mes, 1).strftime('%B %Y')
-            files.append((mes_str, año, mes, file))
+    if CARTERA_RAW_DIR.exists():
+        pattern_files = get_excel_files(CARTERA_RAW_DIR, "cartera-*.xlsx")
+        for file in pattern_files:
+            date_info = parse_filename_date(file)
+            if date_info:
+                año, mes = date_info
+                # Formatear mes en español
+                mes_str = f"{meses_es[mes-1]} {año}"
+                files.append((mes_str, año, mes, file))
+    else:
+        # Si el directorio no existe, intentar crearlo
+        try:
+            CARTERA_RAW_DIR.mkdir(parents=True, exist_ok=True)
+        except:
+            pass
     
     # Buscar en el directorio raíz (compatibilidad hacia atrás)
     root_files = get_excel_files(Path("."), "cartera-*.xlsx")
@@ -118,7 +170,8 @@ def detect_cartera_files():
         date_info = parse_filename_date(file)
         if date_info:
             año, mes = date_info
-            mes_str = datetime(año, mes, 1).strftime('%B %Y')
+            # Formatear mes en español (consistente con el resto)
+            mes_str = f"{meses_es[mes-1]} {año}"
             # Evitar duplicados
             if not any(f[3] == file for f in files):
                 files.append((mes_str, año, mes, file))
@@ -139,7 +192,10 @@ def detect_recaudo_files():
         date_info = parse_filename_date(file)
         if date_info:
             año, mes = date_info
-            mes_str = datetime(año, mes, 1).strftime('%B %Y')
+            # Formatear mes en español
+            meses_es = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+            mes_str = f"{meses_es[mes-1]} {año}"
             files.append((mes_str, año, mes, file))
     
     # Buscar en el directorio raíz (compatibilidad hacia atrás)
@@ -317,16 +373,16 @@ def load_cartera_for_comparison(año1, mes1, año2, mes2):
         st.error(f"No se encontró archivo para {datetime(año2, mes2, 1).strftime('%B %Y')}")
         return None, None, None, None
     
-    # Cargar ambos archivos con deduplicación
+    # Cargar ambos archivos (sin deduplicación para mantener totales como antes)
     df1 = load_excel_with_cache(
         file1, CARTERA_CACHE_DIR,
-        processing_func=lambda df: process_cartera_data(df, deduplicate=True),
+        processing_func=lambda df: process_cartera_data(df, deduplicate=False),
         header=7
     )
     
     df2 = load_excel_with_cache(
         file2, CARTERA_CACHE_DIR,
-        processing_func=lambda df: process_cartera_data(df, deduplicate=True),
+        processing_func=lambda df: process_cartera_data(df, deduplicate=False),
         header=7
     )
     
