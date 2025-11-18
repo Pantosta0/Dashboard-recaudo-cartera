@@ -24,6 +24,60 @@ from data_loader import (
 st.title("💰 Dashboard de Recaudo")
 st.markdown("---")
 
+# Estilos responsivos para adaptar la visualización a diferentes pantallas
+st.markdown(
+    """
+    <style>
+        /* Estilos para métricas - adaptar tamaño de fuente */
+        [data-testid="stMetricValue"] {
+            font-size: clamp(1.2rem, 2.5vw, 2rem) !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: clamp(0.85rem, 1.2vw, 1rem) !important;
+        }
+        
+        /* Estilos para tablas - hacer scroll horizontal si es necesario */
+        .stDataFrame {
+            overflow-x: auto;
+        }
+        
+        /* Estilos para gráficos - asegurar que se adapten */
+        .js-plotly-plot {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        /* Ajustar tamaño de texto en subheaders */
+        h3 {
+            font-size: clamp(1.1rem, 2vw, 1.5rem) !important;
+        }
+        
+        /* Ajustar tamaño de texto en headers */
+        h2 {
+            font-size: clamp(1.3rem, 2.5vw, 1.8rem) !important;
+        }
+        
+        /* Ajustar padding de columnas en pantallas pequeñas */
+        @media (max-width: 768px) {
+            .stMetric {
+                padding: 0.5rem !important;
+            }
+        }
+        
+        /* Asegurar que los selectboxes se adapten */
+        .stSelectbox label {
+            font-size: clamp(0.9rem, 1.3vw, 1rem) !important;
+        }
+        
+        /* Ajustar tamaño de texto en expanders */
+        .streamlit-expanderHeader {
+            font-size: clamp(0.95rem, 1.4vw, 1.1rem) !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Cargar datos
 @st.cache_data
 def load_data(mes_selected=None, año=None, mes_num=None):

@@ -34,6 +34,7 @@ st.markdown(
             border-radius: 16px;
             border: 1px solid #1f2937;
             padding: 1.25rem;
+            margin-bottom: 1.5rem;
             min-height: 420px;
             height: 100%;
             display: flex;
@@ -387,6 +388,10 @@ if df is not None and not df.empty:
     # Filtrar datos (por ahora todos, pero preparado para filtrado por mes)
     df_filtered = df.copy()
     
+    # Eliminar completamente los registros de "Sin Clasificar"
+    if 'Empresa' in df_filtered.columns:
+        df_filtered = df_filtered[df_filtered['Empresa'] != 'Sin Clasificar'].copy()
+    
     # Calcular métricas por empresa en el orden solicitado
     empresas = df_filtered['Empresa'].unique() if 'Empresa' in df_filtered.columns else []
     orden_preferido = [
@@ -398,7 +403,6 @@ if df is not None and not df.empty:
         "Motored",
         "Cartera Castigada",
         "Otras",
-        "Sin Clasificar",
     ]
     empresas_presentes = [e for e in orden_preferido if e in empresas]
     otras_empresas = sorted([e for e in empresas if e not in orden_preferido])
