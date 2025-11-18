@@ -9,7 +9,10 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
-data/
+data/cartera/cache/
+data/recaudo/cache/
+data/cartera/raw/
+data/recaudo/raw/
 develop-eggs/
 dist/
 downloads/

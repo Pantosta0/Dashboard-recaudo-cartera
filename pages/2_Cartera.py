@@ -277,11 +277,11 @@ def load_cartera_data(año=None, mes_num=None):
         # Usar el archivo más reciente
         selected_file = available_files[0][3]
     
-    # Cargar con caché y deduplicación
+    # Cargar con caché (sin deduplicación para mantener totales como antes)
     df = load_excel_with_cache(
         selected_file,
         CARTERA_CACHE_DIR,
-        processing_func=lambda df: process_cartera_data(df, deduplicate=True),
+        processing_func=lambda df: process_cartera_data(df, deduplicate=False),
         header=7
     )
     

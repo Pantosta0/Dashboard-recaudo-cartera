@@ -341,16 +341,16 @@ def load_cartera_for_comparison(año1, mes1, año2, mes2):
         st.error(f"No se encontró archivo para {datetime(año2, mes2, 1).strftime('%B %Y')}")
         return None, None, None, None
     
-    # Cargar ambos archivos con deduplicación
+    # Cargar ambos archivos (sin deduplicación para mantener totales como antes)
     df1 = load_excel_with_cache(
         file1, CARTERA_CACHE_DIR,
-        processing_func=lambda df: process_cartera_data(df, deduplicate=True),
+        processing_func=lambda df: process_cartera_data(df, deduplicate=False),
         header=7
     )
     
     df2 = load_excel_with_cache(
         file2, CARTERA_CACHE_DIR,
-        processing_func=lambda df: process_cartera_data(df, deduplicate=True),
+        processing_func=lambda df: process_cartera_data(df, deduplicate=False),
         header=7
     )
     
