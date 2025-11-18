@@ -183,6 +183,8 @@ def detect_recaudo_files():
     Retorna lista de tuplas (mes_str, año, mes_num, archivo_path)
     """
     files = []
+    meses_es = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+               'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
     
     # Buscar en el directorio de recaudo/raw
     pattern_files = get_excel_files(RECAUDO_RAW_DIR, "recaudo-*.xlsx")
@@ -191,8 +193,6 @@ def detect_recaudo_files():
         if date_info:
             año, mes = date_info
             # Formatear mes en español
-            meses_es = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
             mes_str = f"{meses_es[mes-1]} {año}"
             files.append((mes_str, año, mes, file))
     
@@ -202,7 +202,8 @@ def detect_recaudo_files():
         date_info = parse_filename_date(file)
         if date_info:
             año, mes = date_info
-            mes_str = datetime(año, mes, 1).strftime('%B %Y')
+            # Formatear mes en español (consistente con el resto)
+            mes_str = f"{meses_es[mes-1]} {año}"
             # Evitar duplicados
             if not any(f[3] == file for f in files):
                 files.append((mes_str, año, mes, file))
