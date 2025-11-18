@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 from fpdf import FPDF
-import math
 import sys
 from pathlib import Path
 
@@ -17,6 +16,7 @@ from data_loader import (
     detect_cartera_files, 
     process_cartera_data,
     CARTERA_CACHE_DIR,
+    CARTERA_RAW_DIR,
     load_cartera_for_comparison,
     compare_cartera_periods
 )
@@ -182,25 +182,6 @@ def format_currency(value):
         return "$0"
 
 
-def calcular_factor_confianza(cantidad_registros):
-    """
-    Calcula un factor de confianza basado en la cantidad de registros.
-    Zonas con más registros tienen mayor confianza.
-    Usa una función logarítmica para suavizar el efecto.
-    """
-    # Factor mínimo de 0.3 para zonas con muy pocos registros
-    # Factor máximo de 1.0 para zonas con muchos registros
-    # Usamos logaritmo para suavizar: log10(registros + 1) / log10(100)
-    if cantidad_registros <= 0:
-        return 0.3
-    
-    # Normalización: zonas con 100+ registros tienen factor 1.0
-    # Zonas con 10 registros tienen factor ~0.7
-    # Zonas con 1 registro tienen factor ~0.3
-    factor = min(1.0, 0.3 + (math.log10(cantidad_registros + 1) / math.log10(100)) * 0.7)
-    return factor
-
-
 def generar_pdf(resumen_data, mes):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=18)
@@ -313,6 +294,24 @@ def load_cartera_data(año=None, mes_num=None):
 # Detectar archivos disponibles primero
 available_files = detect_cartera_files()
 
+# Información de depuración (solo en modo desarrollo)
+if len(available_files) == 0:
+    st.warning(f"⚠️ **No se encontraron archivos de cartera.**")
+    st.info(f"📁 **Buscando en:** `{CARTERA_RAW_DIR}` y directorio raíz")
+    st.info(f"📋 **Patrón esperado:** `cartera-YYYY-MM.xlsx` (ej: `cartera-2024-10.xlsx`)")
+    
+    # Mostrar archivos que existen en el directorio
+    if CARTERA_RAW_DIR.exists():
+        all_files = list(CARTERA_RAW_DIR.glob("*.xlsx"))
+        if all_files:
+            st.write("**Archivos encontrados en el directorio (que no coinciden con el patrón):**")
+            for f in all_files:
+                st.write(f"- {f.name}")
+        else:
+            st.write("**No hay archivos .xlsx en el directorio.**")
+    else:
+        st.write(f"**El directorio `{CARTERA_RAW_DIR}` no existe.**")
+
 if available_files:
     # Inicializar session state para el mes seleccionado
     if 'cartera_selected_month' not in st.session_state:
@@ -334,7 +333,8 @@ if available_files:
         mes_selected = st.sidebar.selectbox(
             "Seleccionar Mes", 
             meses_opciones,
-            index=current_index
+            index=current_index,
+            key="selectbox_mes_cartera"
         )
         
         # Obtener año y mes del archivo seleccionado
@@ -346,10 +346,17 @@ if available_files:
                 mes_num_selected = mes_num
                 break
         
-        # Actualizar session state
-        st.session_state.cartera_selected_month = mes_selected
-        st.session_state.cartera_selected_year = año_selected
-        st.session_state.cartera_selected_month_num = mes_num_selected
+        # Verificar si cambió el mes y recargar si es necesario
+        if (st.session_state.cartera_selected_month != mes_selected or 
+            st.session_state.cartera_selected_year != año_selected):
+            # Actualizar session state
+            st.session_state.cartera_selected_month = mes_selected
+            st.session_state.cartera_selected_year = año_selected
+            st.session_state.cartera_selected_month_num = mes_num_selected
+            # Limpiar caché de la función para forzar recarga
+            load_cartera_data.clear()
+            # Recargar página para aplicar cambios
+            st.rerun()
         
         # Cargar datos (el caché se invalida automáticamente con año y mes_num)
         df = load_cartera_data(año_selected, mes_num_selected)
@@ -367,7 +374,14 @@ else:
     mes_selected = "Sin datos disponibles"
 
 if df is not None and not df.empty:
-    st.info(f"📅 **Mes seleccionado: {mes_selected}**")
+    # Mostrar información del archivo cargado para depuración
+    file_info = None
+    for mes_str, año, mes_num, file_path in available_files:
+        if mes_str == mes_selected:
+            file_info = file_path
+            break
+    
+    st.info(f"📅 **Mes seleccionado: {mes_selected}** (Archivo: {file_info.name if file_info else 'N/A'})")
     st.markdown("---")
     
     # Filtrar datos (por ahora todos, pero preparado para filtrado por mes)
@@ -603,217 +617,19 @@ if df is not None and not df.empty:
             
             st.plotly_chart(fig, use_container_width=True)
         
-        # Análisis de riesgo por zona (excluyendo Cartera Castigada, Otras y Sin Clasificar)
-        st.markdown("---")
-        st.subheader("⚠️ Análisis de Riesgo por Zona")
-        st.markdown("**Nota:** Este análisis excluye la Cartera Castigada, Otras y Sin Clasificar para evaluar el riesgo potencial de nuevas operaciones de crédito.")
-        
-        # Filtrar datos excluyendo Cartera Castigada, Otras y Sin Clasificar
-        empresas_excluidas = ['Cartera Castigada', 'Otras', 'Sin Clasificar']
-        df_sin_castigada = df_filtered[~df_filtered['Empresa'].isin(empresas_excluidas)].copy()
-        
-        if 'Zona' in df_sin_castigada.columns and not df_sin_castigada.empty:
-            # Calcular métricas por zona
-            zonas_data = []
-            
-            for zona in df_sin_castigada['Zona'].dropna().unique():
-                df_zona = df_sin_castigada[df_sin_castigada['Zona'] == zona].copy()
-                
-                if df_zona.empty:
-                    continue
-                
-                total_cuota = df_zona['Total Cuota'].sum() if 'Total Cuota' in df_zona.columns else 0
-                por_vencer = df_zona['Por Vencer'].sum() if 'Por Vencer' in df_zona.columns else 0
-                dias30 = df_zona['Dias30'].sum() if 'Dias30' in df_zona.columns else 0
-                dias60 = df_zona['Dias60'].sum() if 'Dias60' in df_zona.columns else 0
-                dias90 = df_zona['Dias90'].sum() if 'Dias90' in df_zona.columns else 0
-                dias_mas90 = df_zona['Dias Mas90'].sum() if 'Dias Mas90' in df_zona.columns else 0
-                
-                # Calcular índices de riesgo
-                if total_cuota > 0:
-                    indice_corriente = (por_vencer / total_cuota) * 100
-                    indice_b = (dias30 / total_cuota) * 100
-                    indice_c = (dias60 / total_cuota) * 100
-                    indice_d = (dias90 / total_cuota) * 100
-                    indice_e = (dias_mas90 / total_cuota) * 100
-                    indice_mora_total = ((dias30 + dias60 + dias90 + dias_mas90) / total_cuota) * 100
-                else:
-                    indice_corriente = indice_b = indice_c = indice_d = indice_e = indice_mora_total = 0
-                
-                # Calcular score de riesgo (mayor valor = mayor riesgo)
-                # Ponderación: Tipo E (más grave) tiene mayor peso
-                score_riesgo = (indice_b * 1) + (indice_c * 2) + (indice_d * 3) + (indice_e * 5)
-                
-                # Calcular factor de confianza basado en cantidad de registros
-                cantidad_registros = len(df_zona)
-                factor_confianza = calcular_factor_confianza(cantidad_registros)
-                
-                # Score normalizado: ajusta el score por el factor de confianza
-                # Zonas con pocos registros tienen su score reducido
-                score_riesgo_normalizado = score_riesgo * factor_confianza
-                
-                zonas_data.append({
-                    'Zona': zona,
-                    'Cartera Total': total_cuota,
-                    'Por Vencer': por_vencer,
-                    'Días 30': dias30,
-                    'Días 60': dias60,
-                    'Días 90': dias90,
-                    'Días +90': dias_mas90,
-                    'Índice Corriente (%)': indice_corriente,
-                    'Índice Tipo B (%)': indice_b,
-                    'Índice Tipo C (%)': indice_c,
-                    'Índice Tipo D (%)': indice_d,
-                    'Índice Tipo E (%)': indice_e,
-                    'Índice Mora Total (%)': indice_mora_total,
-                    'Score de Riesgo': score_riesgo,
-                    'Score de Riesgo Normalizado': score_riesgo_normalizado,
-                    'Factor de Confianza': factor_confianza,
-                    'Cantidad Registros': cantidad_registros
-                })
-            
-            if zonas_data:
-                df_zonas = pd.DataFrame(zonas_data)
-                # Ordenar por score de riesgo normalizado descendente (mayor riesgo primero)
-                df_zonas = df_zonas.sort_values('Score de Riesgo Normalizado', ascending=False)
-                
-                # Mostrar top zonas más riesgosas
-                st.markdown("### 🔴 Top Zonas con Mayor Riesgo (Normalizado)")
-                st.markdown("**Nota:** El score normalizado ajusta el riesgo según la cantidad de registros para evitar sesgos en zonas con pocos datos.")
-                
-                # Seleccionar columnas para mostrar
-                columnas_display = [
-                    'Zona', 'Cartera Total', 'Índice Mora Total (%)', 
-                    'Índice Tipo B (%)', 'Índice Tipo C (%)', 
-                    'Índice Tipo D (%)', 'Índice Tipo E (%)', 
-                    'Score de Riesgo Normalizado', 'Factor de Confianza', 'Cantidad Registros'
-                ]
-                
-                df_display = df_zonas[columnas_display].copy()
-                df_display['Cartera Total'] = df_display['Cartera Total'].apply(format_currency)
-                df_display['Índice Mora Total (%)'] = df_display['Índice Mora Total (%)'].apply(lambda x: f"{x:.2f}%")
-                df_display['Índice Tipo B (%)'] = df_display['Índice Tipo B (%)'].apply(lambda x: f"{x:.2f}%")
-                df_display['Índice Tipo C (%)'] = df_display['Índice Tipo C (%)'].apply(lambda x: f"{x:.2f}%")
-                df_display['Índice Tipo D (%)'] = df_display['Índice Tipo D (%)'].apply(lambda x: f"{x:.2f}%")
-                df_display['Índice Tipo E (%)'] = df_display['Índice Tipo E (%)'].apply(lambda x: f"{x:.2f}%")
-                df_display['Score de Riesgo Normalizado'] = df_display['Score de Riesgo Normalizado'].apply(lambda x: f"{x:.2f}")
-                df_display['Factor de Confianza'] = df_display['Factor de Confianza'].apply(lambda x: f"{x:.2f}")
-                
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
-                
-                # Gráficos de riesgo por zona
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("#### 📊 Score de Riesgo Normalizado por Zona")
-                    # Todas las zonas ordenadas por riesgo normalizado
-                    fig_riesgo = go.Figure()
-                    fig_riesgo.add_trace(go.Bar(
-                        x=df_zonas['Zona'],
-                        y=df_zonas['Score de Riesgo Normalizado'],
-                        marker=dict(
-                            color=df_zonas['Score de Riesgo Normalizado'],
-                            colorscale='Reds',
-                            showscale=True,
-                            colorbar=dict(title="Score")
-                        ),
-                        text=[f"{x:.1f}" for x in df_zonas['Score de Riesgo Normalizado']],
-                        textposition='outside',
-                        hovertemplate='<b>%{x}</b><br>Score Normalizado: %{y:.2f}<br>Factor Confianza: %{customdata[0]:.2f}<br>Cantidad Registros: %{customdata[1]}<extra></extra>',
-                        customdata=df_zonas[['Factor de Confianza', 'Cantidad Registros']].values
-                    ))
-                    fig_riesgo.update_layout(
-                        title="Score de Riesgo Normalizado por Zona (ajustado por cantidad de registros)",
-                        xaxis_title="Zona",
-                        yaxis_title="Score de Riesgo Normalizado",
-                        xaxis_tickangle=-45,
-                        height=400
-                    )
-                    st.plotly_chart(fig_riesgo, use_container_width=True)
-                
-                with col2:
-                    st.markdown("#### 📈 Índice de Mora Total por Zona")
-                    # Todas las zonas ordenadas por índice de mora
-                    fig_mora = go.Figure()
-                    fig_mora.add_trace(go.Bar(
-                        x=df_zonas['Zona'],
-                        y=df_zonas['Índice Mora Total (%)'],
-                        marker=dict(
-                            color=df_zonas['Índice Mora Total (%)'],
-                            colorscale='Oranges',
-                            showscale=True,
-                            colorbar=dict(title="%")
-                        ),
-                        text=[f"{x:.1f}%" for x in df_zonas['Índice Mora Total (%)']],
-                        textposition='outside'
-                    ))
-                    fig_mora.update_layout(
-                        title="Índice de Mora Total por Zona (ordenadas por mayor riesgo)",
-                        xaxis_title="Zona",
-                        yaxis_title="Índice de Mora (%)",
-                        xaxis_tickangle=-45,
-                        height=400
-                    )
-                    st.plotly_chart(fig_mora, use_container_width=True)
-                
-                # Gráfico de distribución de índices por zona
-                st.markdown("#### 📉 Distribución de Índices de Riesgo por Zona")
-                
-                fig_indices = go.Figure()
-                fig_indices.add_trace(go.Bar(
-                    name='Tipo B',
-                    x=df_zonas['Zona'],
-                    y=df_zonas['Índice Tipo B (%)'],
-                    marker_color='#f1c40f'
-                ))
-                fig_indices.add_trace(go.Bar(
-                    name='Tipo C',
-                    x=df_zonas['Zona'],
-                    y=df_zonas['Índice Tipo C (%)'],
-                    marker_color='#e67e22'
-                ))
-                fig_indices.add_trace(go.Bar(
-                    name='Tipo D',
-                    x=df_zonas['Zona'],
-                    y=df_zonas['Índice Tipo D (%)'],
-                    marker_color='#e74c3c'
-                ))
-                fig_indices.add_trace(go.Bar(
-                    name='Tipo E',
-                    x=df_zonas['Zona'],
-                    y=df_zonas['Índice Tipo E (%)'],
-                    marker_color='#c0392b'
-                ))
-                
-                fig_indices.update_layout(
-                    barmode='group',
-                    title="Distribución de Índices de Riesgo por Zona (%)",
-                    xaxis_title="Zona",
-                    yaxis_title="Porcentaje (%)",
-                    xaxis_tickangle=-45,
-                    height=500
-                )
-                st.plotly_chart(fig_indices, use_container_width=True)
-                
-                # Botón de descarga
-                csv_zonas = df_zonas.to_csv(index=False).encode('utf-8-sig')
-                st.download_button(
-                    label="📥 Descargar análisis de riesgo por zona (CSV)",
-                    data=csv_zonas,
-                    file_name=f"riesgo_zonas_{mes_selected.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
-            else:
-                st.warning("No se encontraron datos de zonas para analizar.")
-        else:
-            if 'Zona' not in df_sin_castigada.columns:
-                st.warning("⚠️ La columna 'Zona' no está disponible en los datos.")
-            else:
-                st.warning("No hay datos disponibles después de filtrar la Cartera Castigada, Otras y Sin Clasificar.")
-        
         # Sección de Comparación Temporal
         st.markdown("---")
         st.subheader("📊 Comparación Temporal de Cartera")
+        
+        # Mostrar información de depuración
+        if len(available_files) < 2:
+            st.warning(f"⚠️ **Se necesitan al menos 2 archivos de cartera para realizar comparaciones temporales.**")
+            st.info(f"📁 **Archivos detectados: {len(available_files)}**")
+            if len(available_files) > 0:
+                st.write("**Archivos encontrados:**")
+                for mes_str, año, mes_num, file_path in available_files:
+                    st.write(f"- {mes_str} ({file_path.name})")
+            st.info(f"📋 **Patrón esperado:** `cartera-YYYY-MM.xlsx` o `cartera-YYYY-M.xlsx` (ej: `cartera-2024-10.xlsx` o `cartera-2024-9.xlsx`)")
         
         if len(available_files) > 1:
             st.markdown("Compara la cartera entre dos períodos diferentes (mes vs mes, año vs año, etc.)")
