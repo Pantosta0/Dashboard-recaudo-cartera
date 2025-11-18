@@ -64,6 +64,8 @@ def load_excel_with_cache(excel_path, cache_dir, processing_func=None, **read_ex
     if is_cache_valid(excel_path, cache_path):
         try:
             df = pd.read_parquet(cache_path)
+            # Convertir columnas que fueron guardadas como string de vuelta a su tipo original si es necesario
+            # (esto se manejará en la función de procesamiento)
             if processing_func:
                 df = processing_func(df)
             return df
@@ -80,9 +82,39 @@ def load_excel_with_cache(excel_path, cache_dir, processing_func=None, **read_ex
         
         # Guardar en caché
         try:
-            df.to_parquet(cache_path, index=False, compression='snappy')
+            # Asegurar que las columnas de tipo object (strings) se mantengan como strings
+            # Parquet puede tener problemas con columnas object que pandas intenta convertir
+            df_for_cache = df.copy()
+            for col in df_for_cache.columns:
+                if df_for_cache[col].dtype == 'object':
+                    # Convertir a string explícitamente, manteniendo NaN como NaN
+                    # Usar convert_dtypes para preservar tipos pero asegurar que object sea string
+                    df_for_cache[col] = df_for_cache[col].astype('string')  # StringDtype de pandas
+            
+            # Guardar en Parquet con pyarrow que maneja mejor los tipos de datos
+            df_for_cache.to_parquet(
+                cache_path, 
+                index=False, 
+                compression='snappy',
+                engine='pyarrow'
+            )
         except Exception as e:
-            st.warning(f"No se pudo guardar el caché: {e}")
+            # Si falla con string dtype, intentar con conversión más simple
+            try:
+                df_for_cache = df.copy()
+                for col in df_for_cache.columns:
+                    if df_for_cache[col].dtype == 'object':
+                        # Convertir a string, reemplazando NaN con string vacío
+                        df_for_cache[col] = df_for_cache[col].fillna('').astype(str)
+                
+                df_for_cache.to_parquet(
+                    cache_path, 
+                    index=False, 
+                    compression='snappy',
+                    engine='pyarrow'
+                )
+            except Exception as e2:
+                st.warning(f"No se pudo guardar el caché: {e2}")
         
         return df
     except Exception as e:
