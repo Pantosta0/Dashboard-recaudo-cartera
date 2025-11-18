@@ -64,10 +64,8 @@ def load_excel_with_cache(excel_path, cache_dir, processing_func=None, **read_ex
     if is_cache_valid(excel_path, cache_path):
         try:
             df = pd.read_parquet(cache_path)
-            # Convertir columnas que fueron guardadas como string de vuelta a su tipo original si es necesario
-            # (esto se manejará en la función de procesamiento)
-            if processing_func:
-                df = processing_func(df)
+            # El caché ya contiene datos procesados, no aplicar processing_func nuevamente
+            # para evitar procesamiento doble que podría corromper los datos
             return df
         except Exception as e:
             st.warning(f"Error al cargar caché, recargando desde Excel: {e}")
