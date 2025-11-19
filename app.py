@@ -13,6 +13,7 @@ pages = {
     "": [
         st.Page("pages/1_Recaudo.py", title="Recaudo", icon="💰", default=True),
         st.Page("pages/2_Cartera.py", title="Cartera", icon="📊"),
+        st.Page("pages/3_Pipeline.py", title="Pipeline Fiable", icon="🔄"),
     ]
 }
 
