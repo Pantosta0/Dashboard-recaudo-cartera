@@ -21,9 +21,11 @@ CARTERA_RAW_DIR = DATA_DIR / "cartera" / "raw"
 CARTERA_CACHE_DIR = DATA_DIR / "cartera" / "cache"
 RECAUDO_RAW_DIR = DATA_DIR / "recaudo" / "raw"
 RECAUDO_CACHE_DIR = DATA_DIR / "recaudo" / "cache"
+PIPELINE_RAW_DIR = DATA_DIR / "pipeline" / "raw"
+PIPELINE_CACHE_DIR = DATA_DIR / "pipeline" / "cache"
 
 # Crear directorios si no existen
-for dir_path in [CARTERA_RAW_DIR, CARTERA_CACHE_DIR, RECAUDO_RAW_DIR, RECAUDO_CACHE_DIR]:
+for dir_path in [CARTERA_RAW_DIR, CARTERA_CACHE_DIR, RECAUDO_RAW_DIR, RECAUDO_CACHE_DIR, PIPELINE_RAW_DIR, PIPELINE_CACHE_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
 def get_excel_files(directory, pattern="*.xlsx"):
@@ -210,6 +212,45 @@ def detect_recaudo_files():
     
     return sorted(files, key=lambda x: (x[1], x[2]), reverse=True)
 
+
+def detect_fiable_pipeline_files():
+    """
+    Detecta archivos de pipeline Fiable disponibles.
+    Busca archivos con patrón: fiable-creditos-YYYY.xlsx o fiable-creditos-YYYY-MM.xlsx
+    Retorna lista de tuplas (periodo_str, año, mes, archivo_path)
+    """
+    files = []
+    meses_es = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+    pattern_files = get_excel_files(PIPELINE_RAW_DIR, "fiable-creditos-*.xls")
+    for file in pattern_files:
+        match = re.search(r'(\d{4})(?:-(\d{1,2}))?', file.stem)
+        if match:
+            año = int(match.group(1))
+            mes = int(match.group(2)) if match.group(2) else None
+            if mes and 1 <= mes <= 12:
+                periodo_str = f"{meses_es[mes-1]} {año}"
+            else:
+                periodo_str = f"Año {año}"
+            files.append((periodo_str, año, mes, file))
+
+    # Compatibilidad: buscar en raíz
+    root_files = get_excel_files(Path("."), "fiable-creditos-*.xls")
+    for file in root_files:
+        match = re.search(r'(\d{4})(?:-(\d{1,2}))?', file.stem)
+        if match:
+            año = int(match.group(1))
+            mes = int(match.group(2)) if match.group(2) else None
+            if mes and 1 <= mes <= 12:
+                periodo_str = f"{meses_es[mes-1]} {año}"
+            else:
+                periodo_str = f"Año {año}"
+            if not any(existing[3] == file for existing in files):
+                files.append((periodo_str, año, mes, file))
+
+    return sorted(files, key=lambda x: (x[1], x[2] if x[2] is not None else 0), reverse=True)
+
 # Funciones de procesamiento específicas
 def process_cartera_data(df, deduplicate=True):
     """
@@ -346,6 +387,116 @@ def process_recaudo_data(df):
                 df[col] = pd.to_numeric(serie_limpia, errors='coerce').astype('float64')
     
     return df
+
+
+def process_fiable_pipeline_data(df):
+    """
+    Procesa los datos del pipeline Fiable para estandarizar columnas y tipos.
+    """
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+    df.columns = df.columns.str.strip().str.lower()
+
+    rename_map = {
+        'estado': 'ESTADO',
+        'fecha': 'FECHA',
+        'asesor': 'ASESOR',
+        'consecutivo': 'CONSECUTIVO',
+        'identificacion': 'IDENTIFICACION',
+        'cliente': 'CLIENTE',
+        'estacion': 'ESTACION',
+        'fechanalisis': 'FECHA_ANALISIS',
+        'producto': 'PRODUCTO',
+    }
+    df = df.rename(columns=rename_map)
+
+    required_cols = ['ESTADO', 'FECHA']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        st.warning(f"Faltan columnas requeridas en Fiable: {', '.join(missing_cols)}")
+        for col in missing_cols:
+            df[col] = None
+
+    # Convertir fechas
+    for fecha_col in ['FECHA', 'FECHA_ANALISIS']:
+        if fecha_col in df.columns:
+            df[fecha_col] = pd.to_datetime(df[fecha_col], errors='coerce')
+
+    # Normalizar textos
+    text_cols = ['ASESOR', 'CONSECUTIVO', 'IDENTIFICACION', 'CLIENTE', 'ESTACION', 'PRODUCTO', 'ESTADO']
+    for col in text_cols:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
+
+    estados_referencia = {
+        'creado': 'CREADO',
+        'aprobado': 'APROBADO',
+        'en analisis': 'EN ANALISIS',
+        'en análisis': 'EN ANALISIS',
+        'excepcionado': 'EXCEPCIONADO',
+        'legalizado': 'LEGALIZADO',
+        'pre-legalizado': 'PRE-LEGALIZADO',
+        'pre legalizado': 'PRE-LEGALIZADO',
+        'rechazado': 'RECHAZADO',
+        'reproceso': 'REPROCESO',
+        'solicitado': 'SOLICITADO',
+    }
+
+    if 'ESTADO' in df.columns:
+        estados_limpios = (
+            df['ESTADO']
+            .str.lower()
+            .str.replace('á', 'a', regex=False)
+            .str.replace('é', 'e', regex=False)
+            .str.replace('í', 'i', regex=False)
+            .str.replace('ó', 'o', regex=False)
+            .str.replace('ú', 'u', regex=False)
+        )
+        df['ESTADO_NORMALIZADO'] = estados_limpios.map(estados_referencia).fillna(df['ESTADO'].str.upper())
+    else:
+        df['ESTADO_NORMALIZADO'] = 'SIN ESTADO'
+
+    if 'FECHA' in df.columns:
+        df['AÑO'] = df['FECHA'].dt.year
+        df['MES'] = df['FECHA'].dt.month
+        df['MES_PERIODO'] = df['FECHA'].dt.to_period('M')
+    else:
+        df['AÑO'] = None
+        df['MES'] = None
+        df['MES_PERIODO'] = None
+
+    df['MES_LABEL'] = df['FECHA'].dt.strftime('%B %Y') if 'FECHA' in df.columns else None
+
+    return df
+
+
+def load_all_fiable_pipeline():
+    """
+    Carga y combina todos los archivos de pipeline Fiable disponibles.
+    """
+    files = detect_fiable_pipeline_files()
+    if not files:
+        return None
+
+    dataframes = []
+    for periodo_str, año, mes, file_path in files:
+        df = load_excel_with_cache(
+            file_path,
+            PIPELINE_CACHE_DIR,
+            processing_func=process_fiable_pipeline_data
+        )
+        if df is not None and not df.empty:
+            df = df.copy()
+            df['ARCHIVO_ORIGEN'] = file_path.name
+            df['PERIODO_ARCHIVO'] = periodo_str
+            dataframes.append(df)
+
+    if not dataframes:
+        return None
+
+    return pd.concat(dataframes, ignore_index=True)
 
 
 def load_cartera_for_comparison(año1, mes1, año2, mes2):
