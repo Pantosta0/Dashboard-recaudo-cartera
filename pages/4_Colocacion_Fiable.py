@@ -41,8 +41,8 @@ def build_summary(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     summary = (
         df.groupby(group_col)
         .agg(
-            Unidades=("TOTALFAC", "size"),
-            Total_COP=("TOTALFAC", "sum"),
+            Unidades=("TOTALFAC", lambda x: len(x) - (x < 0).sum() * 2),  # Restar 2 por cada negativo
+            Total_COP=("TOTALFAC", "sum"),  # Sumar todos (los negativos ya reducen el total)
         )
         .reset_index()
     )
@@ -178,11 +178,12 @@ st.info(
     f"Se contrasta con el mismo periodo de {selected_year - 1}."
 )
 
-total_unidades = len(df_ytd_current)
-total_cop = df_ytd_current["TOTALFAC"].sum(skipna=True)
+# Contar todos los registros menos 2 por cada TotalFac negativo (devoluciones)
+total_unidades = len(df_ytd_current) - (df_ytd_current["TOTALFAC"] < 0).sum() * 2
+total_cop = df_ytd_current["TOTALFAC"].sum(skipna=True)  # Incluir todos (los negativos reducen el total)
 ticket_promedio = total_cop / total_unidades if total_unidades else 0
-total_unidades_prev = len(df_ytd_prev)
-total_cop_prev = df_ytd_prev["TOTALFAC"].sum(skipna=True)
+total_unidades_prev = len(df_ytd_prev) - (df_ytd_prev["TOTALFAC"] < 0).sum() * 2
+total_cop_prev = df_ytd_prev["TOTALFAC"].sum(skipna=True)  # Incluir todos
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Unidades (registros)", f"{total_unidades:,}")
@@ -196,8 +197,9 @@ st.subheader("📅 Mes seleccionado vs mes anterior")
 df_month_current = df_filtered[
     (df_filtered["ANIO"] == selected_year) & (df_filtered["MES"] == selected_month)
 ]
-month_units = len(df_month_current)
-month_total = df_month_current["TOTALFAC"].sum(skipna=True)
+# Contar todos los registros menos 2 por cada TotalFac negativo (devoluciones)
+month_units = len(df_month_current) - (df_month_current["TOTALFAC"] < 0).sum() * 2
+month_total = df_month_current["TOTALFAC"].sum(skipna=True)  # Incluir todos (los negativos reducen el total)
 month_ticket = month_total / month_units if month_units else 0
 
 # Comparar con el mes anterior del mismo año
@@ -211,7 +213,7 @@ df_month_prev_same_year = df_filtered[
     (df_filtered["ANIO"] == prev_month_year) & (df_filtered["MES"] == prev_month)
 ]
 
-month_prev_units = len(df_month_prev_same_year)
+month_prev_units = len(df_month_prev_same_year) - (df_month_prev_same_year["TOTALFAC"] < 0).sum() * 2 if not df_month_prev_same_year.empty else 0
 month_prev_total = df_month_prev_same_year["TOTALFAC"].sum(skipna=True) if not df_month_prev_same_year.empty else 0
 month_prev_ticket = month_prev_total / month_prev_units if month_prev_units else 0
 
@@ -283,8 +285,9 @@ st.subheader("📅 Mes seleccionado vs mismo mes año anterior")
 df_month_prev = df_filtered[
     (df_filtered["ANIO"] == selected_year - 1) & (df_filtered["MES"] == selected_month)
 ]
-month_units_prev = len(df_month_prev)
-month_total_prev = df_month_prev["TOTALFAC"].sum(skipna=True)
+# Contar todos los registros menos 2 por cada TotalFac negativo (devoluciones)
+month_units_prev = len(df_month_prev) - (df_month_prev["TOTALFAC"] < 0).sum() * 2
+month_total_prev = df_month_prev["TOTALFAC"].sum(skipna=True)  # Incluir todos (los negativos reducen el total)
 month_ticket_prev = month_total_prev / month_units_prev if month_units_prev else 0
 
 delta_month_units = month_units - month_units_prev
@@ -562,8 +565,8 @@ if "CENTRO_COSTO" in df_analysis.columns:
     centro_summary = (
         df_analysis.groupby("CENTRO_COSTO")
         .agg(
-            Unidades=("TOTALFAC", "size"),
-            Total_COP=("TOTALFAC", "sum"),
+            Unidades=("TOTALFAC", lambda x: len(x) - (x < 0).sum() * 2),  # Restar 2 por cada negativo
+            Total_COP=("TOTALFAC", "sum"),  # Incluir todos (los negativos reducen el total)
         )
         .reset_index()
     )

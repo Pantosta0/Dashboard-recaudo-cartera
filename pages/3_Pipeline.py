@@ -64,7 +64,7 @@ if df is None or df.empty:
 # Filtros básicos
 st.sidebar.header("🔍 Filtros")
 estado_options = [estado for estado in PIPELINE_STATES if estado in df['ESTADO_NORMALIZADO'].unique()]
-estado_filter = st.sidebar.multiselect("Estado", estado_options, default=estado_options)
+estado_filter = st.sidebar.multiselect("Estado", estado_options, default=None)
 
 asesores = sorted([x for x in df['ASESOR'].dropna().unique()]) if 'ASESOR' in df.columns else []
 asesor_filter = st.sidebar.multiselect("Asesor", asesores) if asesores else []

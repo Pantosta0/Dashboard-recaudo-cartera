@@ -34,6 +34,7 @@ pages = {
         st.Page("pages/2_Cartera.py", title="Cartera", icon="📊"),
         st.Page("pages/3_Pipeline.py", title="Pipeline Fiable", icon="🔄"),
         st.Page("pages/4_Colocacion_Fiable.py", title="Colocación Fiable", icon="📦"),
+        st.Page("pages/5_Informe_Cartera_Fiable.py", title="Informe Cartera FIABLE", icon="📋"),
     ]
 }
 

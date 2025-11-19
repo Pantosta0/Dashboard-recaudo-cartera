@@ -26,12 +26,15 @@ PIPELINE_RAW_DIR = DATA_DIR / "pipeline" / "raw"
 PIPELINE_CACHE_DIR = DATA_DIR / "pipeline" / "cache"
 COLOCACION_RAW_DIR = DATA_DIR / "colocacion" / "raw"
 COLOCACION_CACHE_DIR = DATA_DIR / "colocacion" / "cache"
+CARTERA_FIABLE_RAW_DIR = DATA_DIR / "cartera_fiable" / "raw"
+CARTERA_FIABLE_CACHE_DIR = DATA_DIR / "cartera_fiable" / "cache"
 
 CACHE_DIRS = [
     CARTERA_CACHE_DIR,
     RECAUDO_CACHE_DIR,
     PIPELINE_CACHE_DIR,
     COLOCACION_CACHE_DIR,
+    CARTERA_FIABLE_CACHE_DIR,
 ]
 
 # Crear directorios si no existen
@@ -44,6 +47,8 @@ for dir_path in [
     PIPELINE_CACHE_DIR,
     COLOCACION_RAW_DIR,
     COLOCACION_CACHE_DIR,
+    CARTERA_FIABLE_RAW_DIR,
+    CARTERA_FIABLE_CACHE_DIR,
 ]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -841,3 +846,144 @@ def compare_cartera_periods(df1, df2, periodo1_str, periodo2_str, clasificar_emp
     
     return pd.DataFrame(comparison_data)
 
+
+def process_cartera_colocada_fiable(df):
+    """Procesa los datos de Cartera Colocada FIABLE"""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    return df
+
+def process_cartera_financiero_fiable(df):
+    """Procesa los datos de Cartera Financiero X edades FIABLE"""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    # Convertir fechas
+    if 'Vencimiento' in df.columns:
+        df['Vencimiento'] = pd.to_datetime(df['Vencimiento'], errors='coerce')
+    # Convertir columnas numéricas
+    numeric_cols = ['Capital', 'Cuota', 'Interes', 'Fianza', 'abonofianza']
+    for col in numeric_cols:
+        if col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = pd.to_numeric(
+                    df[col].astype(str).str.replace(',', '', regex=False)
+                    .str.replace('$', '', regex=False).str.replace(' ', '', regex=False),
+                    errors='coerce'
+                ).fillna(0)
+    return df
+
+def process_cartera_proyectadas_fiable(df):
+    """Procesa los datos de Cartera Proyectadas FIABLE"""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    # Convertir fechas
+    date_cols = ['Fecha_Factura', 'FechaProximaVencer', 'Vencimientofinal', 'fechaprimeracuota']
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    # Convertir columnas numéricas
+    numeric_cols = ['InteresVenci', 'Total', 'PorVencer', 'Treinta_Dias', 'Sesenta_Dias', 
+                  'Noventa_Dias', 'Mas_de_Noventa', 'Cuotaspendientes', 'DiasVencimiento']
+    for col in numeric_cols:
+        if col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = pd.to_numeric(
+                    df[col].astype(str).str.replace(',', '', regex=False)
+                    .str.replace('$', '', regex=False).str.replace(' ', '', regex=False),
+                    errors='coerce'
+                ).fillna(0)
+    return df
+
+def load_cartera_fiable_files():
+    """
+    Carga los 3 archivos de cartera FIABLE usando caché en disco:
+    - Cartera Colocada FIABLE
+    - Cartera Financiero X edades FIABLE
+    - Cartera Proyectadas FIABLE
+    
+    Los archivos se buscan en: data/cartera_fiable/raw/
+    Los archivos se cachean en: data/cartera_fiable/cache/
+    
+    Retorna tupla (df_colocada, df_financiero, df_proyectadas) o (None, None, None) si hay error
+    """
+    # Buscar archivos en el directorio de cartera_fiable/raw
+    file_colocada = None
+    file_financiero = None
+    file_proyectadas = None
+    
+    # Buscar archivos en el directorio específico
+    if CARTERA_FIABLE_RAW_DIR.exists():
+        for file in CARTERA_FIABLE_RAW_DIR.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "colocada" in name_lower and "fiable" in name_lower:
+                file_colocada = file
+            elif "financiero" in name_lower and "edades" in name_lower and "fiable" in name_lower:
+                file_financiero = file
+            elif "proyectadas" in name_lower and "fiable" in name_lower:
+                file_proyectadas = file
+    
+    # Si no se encuentran en el directorio específico, buscar en el directorio raíz (compatibilidad)
+    root_dir = Path(".")
+    if not file_colocada:
+        for file in root_dir.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "colocada" in name_lower and "fiable" in name_lower:
+                file_colocada = file
+                break
+    
+    if not file_financiero:
+        for file in root_dir.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "financiero" in name_lower and "edades" in name_lower and "fiable" in name_lower:
+                file_financiero = file
+                break
+    
+    if not file_proyectadas:
+        for file in root_dir.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "proyectadas" in name_lower and "fiable" in name_lower:
+                file_proyectadas = file
+                break
+    
+    # Cargar archivos usando caché
+    df_colocada = None
+    df_financiero = None
+    df_proyectadas = None
+    
+    if file_colocada:
+        try:
+            df_colocada = load_excel_with_cache(
+                file_colocada,
+                CARTERA_FIABLE_CACHE_DIR,
+                processing_func=process_cartera_colocada_fiable
+            )
+        except Exception as e:
+            st.warning(f"Error al cargar Cartera Colocada: {e}")
+    
+    if file_financiero:
+        try:
+            df_financiero = load_excel_with_cache(
+                file_financiero,
+                CARTERA_FIABLE_CACHE_DIR,
+                processing_func=process_cartera_financiero_fiable
+            )
+        except Exception as e:
+            st.warning(f"Error al cargar Cartera Financiero X edades: {e}")
+    
+    if file_proyectadas:
+        try:
+            df_proyectadas = load_excel_with_cache(
+                file_proyectadas,
+                CARTERA_FIABLE_CACHE_DIR,
+                processing_func=process_cartera_proyectadas_fiable
+            )
+        except Exception as e:
+            st.warning(f"Error al cargar Cartera Proyectadas: {e}")
+    
+    return df_colocada, df_financiero, df_proyectadas
