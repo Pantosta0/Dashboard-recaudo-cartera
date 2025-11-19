@@ -51,6 +51,11 @@ La aplicación abrirá el navegador por defecto. Usa `Ctrl+C` en la terminal par
   - Filtros por estado, asesor, estación, producto y rango de fechas.
   - Comparación de periodos, métricas YTD, evolución mensual y tabla exportable.
   - Estados excluidos configurables para limpiar datos ruidosos.
+- **Colocación Fiable (`pages/4_Colocacion_Fiable.py`):**
+  - Lectura de Excel ubicados en `data/colocacion/raw/` con datos anuales/mensuales.
+  - KPIs de unidades (recuento de registros) y dinero (`TotalFac`) con ticket promedio.
+  - Comparaciones dinámicas por año, mes, centro de costo, vendedor, bodega, producto, etc.
+  - Rankings por centro de costo (unidades/COP) y descarga del dataset filtrado.
 
 Cada página aprovecha caching de Streamlit (`@st.cache_data`) y los auxiliares de `utils/data_loader.py` para acelerar recargas.
 
@@ -63,6 +68,7 @@ Cada página aprovecha caching de Streamlit (`@st.cache_data`) y los auxiliares 
 | Recaudo   | `data/recaudo/raw/`                               | `recaudo-YYYY-MM.xlsx`        | `FUENTE`, `NOMBRE_FUENTE`, `FECHA_VENCIMIENTO`, `FECHA_RECAUDO`, `DIAS_VENCIDOS`, `POR_VENCER`, `TREINTA_DIAS`, `SESENTA_DIAS`, `NOVENTA_DIAS`, `MAS_NOVENTA`, `CLIENTE`, `ZONA`, etc. |
 | Cartera   | `data/cartera/raw/`                               | `cartera-YYYY-MM.xlsx`        | `Cuenta`, `Total Cuota`, `Por Vencer`, `Dias30/60/90/Mas90`, `Vencimiento`, `Razon Social`, `Placa`, `Dias Vencidos`. |
 | Pipeline  | `data/pipeline/raw/`                              | `fiable-creditos-YYYY[-MM].xls` | `ESTADO_NORMALIZADO`, `FECHA`, `ASESOR`, `PRODUCTO`, `ESTACION`, `CLIENTE`, `MES_PERIODO`, `AÑO`, `MES`. |
+| Colocación Fiable | `data/colocacion/raw/`                         | Libre (`*.xls`, `*.xlsx`) por año/mes | `Tipo`, `Nro Factura`, `Fecha Documento`, `AÑO`, `MES`, `Centro Costo`, `Vendedor`, `Modalidadventa`, `Bodega`, `TotalFac`, `Cantidad`, etc. |
 
 Observaciones:
 
@@ -87,13 +93,15 @@ Recaudo-streamlit-test/
 ├─ pages/
 │  ├─ 1_Recaudo.py
 │  ├─ 2_Cartera.py
-│  └─ 3_Pipeline.py
+│  ├─ 3_Pipeline.py
+│  └─ 4_Colocacion_Fiable.py
 ├─ utils/
 │  └─ data_loader.py
 ├─ data/
 │  ├─ cartera/{raw,cache}
 │  ├─ recaudo/{raw,cache}
-│  └─ pipeline/{raw,cache}
+│  ├─ pipeline/{raw,cache}
+│  └─ colocacion/{raw,cache}
 ├─ requirements.txt
 └─ README.md
 ```
