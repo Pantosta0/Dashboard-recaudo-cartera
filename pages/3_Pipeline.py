@@ -61,10 +61,6 @@ if df is None or df.empty:
     st.error("No se encontraron datos de Fiable en caché. Verifica `data/pipeline/raw`.")
     st.stop()
 
-if df is None or df.empty:
-    st.warning("El archivo no contiene registros.")
-    st.stop()
-
 # Filtros básicos
 st.sidebar.header("🔍 Filtros")
 estado_options = [estado for estado in PIPELINE_STATES if estado in df['ESTADO_NORMALIZADO'].unique()]
