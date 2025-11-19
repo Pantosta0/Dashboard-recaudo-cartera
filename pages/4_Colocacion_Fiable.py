@@ -217,33 +217,28 @@ month_prev_ticket = month_prev_total / month_prev_units if month_prev_units else
 
 prev_month_label = f"{MONTH_NAMES.get(prev_month, prev_month)} {prev_month_year}"
 
+delta_prev_units = month_units - month_prev_units
+delta_prev_total = month_total - month_prev_total
+delta_prev_ticket = month_ticket - month_prev_ticket
+pct_prev_units = (delta_prev_units / month_prev_units * 100) if month_prev_units > 0 else 0
+pct_prev_total = (delta_prev_total / month_prev_total * 100) if month_prev_total > 0 else 0
+pct_prev_ticket = (delta_prev_ticket / month_prev_ticket * 100) if month_prev_ticket > 0 else 0
+
 col_prev1, col_prev2, col_prev3 = st.columns(3)
 col_prev1.metric(
-    f"Unidades {prev_month_label}",
-    f"{month_prev_units:,}",
-    f"{month_units - month_prev_units:+,}" if month_prev_units else None,
+    f"Unidades {period_label}",
+    f"{month_units:,}",
+    f"{delta_prev_units:+,} ({pct_prev_units:+.1f}%)" if month_prev_units else None,
 )
-delta_prev_total = month_total - month_prev_total if month_prev_total else None
 col_prev2.metric(
-    f"Total COP {prev_month_label}",
-    format_currency(month_prev_total, decimals=2),
-    (
-        ("+" if delta_prev_total >= 0 else "-")
-        + format_currency(abs(delta_prev_total), decimals=2)
-        if delta_prev_total is not None and delta_prev_total != 0
-        else None
-    ),
+    f"Total COP {period_label}",
+    format_currency(month_total, decimals=2),
+    f"{format_currency(delta_prev_total, decimals=2)} ({pct_prev_total:+.1f}%)" if month_prev_total else None,
 )
-delta_prev_ticket = month_ticket - month_prev_ticket if month_prev_ticket else None
 col_prev3.metric(
-    f"Ticket promedio {prev_month_label}",
-    format_currency(month_prev_ticket, decimals=2),
-    (
-        ("+" if delta_prev_ticket >= 0 else "-")
-        + format_currency(abs(delta_prev_ticket), decimals=2)
-        if delta_prev_ticket is not None and delta_prev_ticket != 0
-        else None
-    ),
+    f"Ticket promedio {period_label}",
+    format_currency(month_ticket, decimals=2),
+    f"{format_currency(delta_prev_ticket, decimals=2)} ({pct_prev_ticket:+.1f}%)" if month_prev_ticket else None,
 )
 
 if not df_month_prev_same_year.empty:
@@ -292,33 +287,28 @@ month_units_prev = len(df_month_prev)
 month_total_prev = df_month_prev["TOTALFAC"].sum(skipna=True)
 month_ticket_prev = month_total_prev / month_units_prev if month_units_prev else 0
 
+delta_month_units = month_units - month_units_prev
+delta_month_total = month_total - month_total_prev
+delta_ticket = month_ticket - month_ticket_prev
+pct_month_units = (delta_month_units / month_units_prev * 100) if month_units_prev > 0 else 0
+pct_month_total = (delta_month_total / month_total_prev * 100) if month_total_prev > 0 else 0
+pct_ticket = (delta_ticket / month_ticket_prev * 100) if month_ticket_prev > 0 else 0
+
 col_m1, col_m2, col_m3 = st.columns(3)
 col_m1.metric(
     f"Unidades {period_label}",
     f"{month_units:,}",
-    f"{month_units - month_units_prev:+,}" if month_units_prev else None,
+    f"{delta_month_units:+,} ({pct_month_units:+.1f}%)" if month_units_prev else None,
 )
-delta_month_total = month_total - month_total_prev if month_total_prev else None
 col_m2.metric(
     f"Total COP {period_label}",
     format_currency(month_total, decimals=2),
-    (
-        ("+" if delta_month_total >= 0 else "-")
-        + format_currency(abs(delta_month_total), decimals=2)
-        if delta_month_total is not None and delta_month_total != 0
-        else None
-    ),
+    f"{format_currency(delta_month_total, decimals=2)} ({pct_month_total:+.1f}%)" if month_total_prev else None,
 )
-delta_ticket = month_ticket - month_ticket_prev if month_ticket_prev else None
 col_m3.metric(
     f"Ticket promedio {period_label}",
     format_currency(month_ticket, decimals=2),
-    (
-        ("+" if delta_ticket >= 0 else "-")
-        + format_currency(abs(delta_ticket), decimals=2)
-        if delta_ticket is not None and delta_ticket != 0
-        else None
-    ),
+    f"{format_currency(delta_ticket, decimals=2)} ({pct_ticket:+.1f}%)" if month_ticket_prev else None,
 )
 
 if not df_month_prev.empty:
@@ -472,105 +462,46 @@ else:
 fig_units.update_layout(xaxis_tickformat=".0f")
 st.plotly_chart(fig_units, use_container_width=True)
 
-if include_prev_month and group_col == "ANIO":
-    # Cuando se agrupa por año, summary_current ya tiene ambos años
-    # Separar en año actual y año anterior
+# Mostrar tabla o métricas según el agrupamiento
+if group_col == "ANIO" and include_prev_month:
+    # Cuando se agrupa por año, mostrar métricas con porcentajes
     summary_current_year = summary_current[summary_current[group_col] == selected_year].copy()
     summary_prev_year = summary_current[summary_current[group_col] == selected_year - 1].copy()
-
-    summary_display = summary_current_year.rename(
-        columns={"Unidades": f"Unidades {selected_year}", "Total_COP": f"Total COP {selected_year}"}
-    ).copy()
-
-    summary_prev_display = summary_prev_year.rename(
-        columns={
-            "Unidades": f"Unidades {selected_year - 1}",
-            "Total_COP": f"Total COP {selected_year - 1}",
-        }
-    )
-    summary_display = summary_display.merge(summary_prev_display, on=group_col, how="outer").fillna(0)
-
-    delta_units = (
-        summary_display[f"Unidades {selected_year}"] - summary_display[f"Unidades {selected_year - 1}"]
-    ).astype(int)
-    delta_cop = (
-        summary_display[f"Total COP {selected_year}"] - summary_display[f"Total COP {selected_year - 1}"]
-    )
-
-    pct_units = (
-        (delta_units / summary_display[f"Unidades {selected_year - 1}"] * 100)
-        .where(summary_display[f"Unidades {selected_year - 1}"] > 0, 0)
-        .round(2)
-    )
-    pct_cop = (
-        (delta_cop / summary_display[f"Total COP {selected_year - 1}"] * 100)
-        .where(summary_display[f"Total COP {selected_year - 1}"] > 0, 0)
-        .round(2)
-    )
-
-    summary_display[f"Δ Unidades vs {selected_year - 1}"] = delta_units
-    summary_display[f"Δ % Unidades vs {selected_year - 1}"] = pct_units.apply(lambda x: f"{x:+.2f}%")
-    summary_display[f"Δ COP vs {selected_year - 1}"] = delta_cop
-    summary_display[f"Δ % COP vs {selected_year - 1}"] = pct_cop.apply(lambda x: f"{x:+.2f}%")
-elif include_prev_month:
-    # Para otros agrupamientos, usar la lógica normal
-    summary_display = summary_current.rename(
-        columns={"Unidades": f"Unidades {selected_year}", "Total_COP": f"Total COP {selected_year}"}
-    ).copy()
-    summary_prev_display = summary_prev.rename(
-        columns={
-            "Unidades": f"Unidades {selected_year - 1}",
-            "Total_COP": f"Total COP {selected_year - 1}",
-        }
-    )
-    summary_display = summary_display.merge(summary_prev_display, on=group_col, how="outer").fillna(0)
     
-    # Calcular deltas absolutos
-    delta_units = (
-        summary_display[f"Unidades {selected_year}"] - summary_display[f"Unidades {selected_year - 1}"]
-    ).astype(int)
-    delta_cop = (
-        summary_display[f"Total COP {selected_year}"] - summary_display[f"Total COP {selected_year - 1}"]
-    )
+    units_current = summary_current_year["Unidades"].iloc[0] if not summary_current_year.empty else 0
+    units_prev = summary_prev_year["Unidades"].iloc[0] if not summary_prev_year.empty else 0
+    cop_current = summary_current_year["Total_COP"].iloc[0] if not summary_current_year.empty else 0
+    cop_prev = summary_prev_year["Total_COP"].iloc[0] if not summary_prev_year.empty else 0
     
-    # Calcular porcentajes
-    pct_units = (
-        (delta_units / summary_display[f"Unidades {selected_year - 1}"] * 100)
-        .where(summary_display[f"Unidades {selected_year - 1}"] > 0, 0)
-        .round(2)
-    )
-    pct_cop = (
-        (delta_cop / summary_display[f"Total COP {selected_year - 1}"] * 100)
-        .where(summary_display[f"Total COP {selected_year - 1}"] > 0, 0)
-        .round(2)
-    )
+    delta_units_year = units_current - units_prev
+    delta_cop_year = cop_current - cop_prev
+    pct_units_year = (delta_units_year / units_prev * 100) if units_prev > 0 else 0
+    pct_cop_year = (delta_cop_year / cop_prev * 100) if cop_prev > 0 else 0
     
-    summary_display[f"Δ Unidades vs {selected_year - 1}"] = delta_units
-    summary_display[f"Δ % Unidades vs {selected_year - 1}"] = pct_units.apply(lambda x: f"{x:+.2f}%")
-    summary_display[f"Δ COP vs {selected_year - 1}"] = delta_cop
-    summary_display[f"Δ % COP vs {selected_year - 1}"] = pct_cop.apply(lambda x: f"{x:+.2f}%")
+    col_year1, col_year2 = st.columns(2)
+    col_year1.metric(
+        f"Unidades {selected_year}",
+        f"{int(units_current):,}",
+        f"{delta_units_year:+,} ({pct_units_year:+.1f}%)" if units_prev > 0 else None,
+    )
+    col_year2.metric(
+        f"Total COP {selected_year}",
+        format_currency(cop_current, decimals=2),
+        f"{format_currency(delta_cop_year, decimals=2)} ({pct_cop_year:+.1f}%)" if cop_prev > 0 else None,
+    )
 else:
+    # Para otros agrupamientos, mostrar tabla
     summary_display = summary_current.rename(
-        columns={"Unidades": f"Unidades {selected_year}", "Total_COP": f"Total COP {selected_year}"}
+        columns={
+            "ANIO": "Año",
+            "Unidades": "Unidades",
+            "Total_COP": "Total COP",
+        }
     ).copy()
-    summary_display[f"Unidades {selected_year - 1}"] = 0
-    summary_display[f"Total COP {selected_year - 1}"] = 0.0
-    summary_display[f"Δ Unidades vs {selected_year - 1}"] = summary_display[f"Unidades {selected_year}"]
-    summary_display[f"Δ % Unidades vs {selected_year - 1}"] = "N/A"
-    summary_display[f"Δ COP vs {selected_year - 1}"] = summary_display[f"Total COP {selected_year}"]
-    summary_display[f"Δ % COP vs {selected_year - 1}"] = "N/A"
-
-summary_display[f"Total COP {selected_year}"] = summary_display[f"Total COP {selected_year}"].apply(
-    lambda x: format_currency(x, decimals=2)
-)
-summary_display[f"Total COP {selected_year - 1}"] = summary_display[f"Total COP {selected_year - 1}"].apply(
-    lambda x: format_currency(x, decimals=2)
-)
-summary_display[f"Δ COP vs {selected_year - 1}"] = summary_display[f"Δ COP vs {selected_year - 1}"].apply(
-    lambda x: format_currency(x, decimals=2)
-)
-
-st.dataframe(summary_display, use_container_width=True)
+    if "Total COP" in summary_display.columns:
+        summary_display["Total COP"] = summary_display["Total COP"].apply(lambda x: format_currency(x, decimals=2))
+    
+    st.dataframe(summary_display, use_container_width=True)
 
 st.markdown("---")
 st.subheader("💵 Comparativo por valor (COP)")
