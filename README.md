@@ -107,4 +107,3 @@ Recaudo-streamlit-test/
 - Si modificas `data_loader`, agrega notas aquí sobre nuevas columnas o reglas.
 - Para depurar, puedes ejecutar `streamlit run pages/1_Recaudo.py --server.headless true` para cargar solo una página durante el desarrollo.
 
-¿Ideas o mejoras? Crea un issue detallando el contexto, los pasos para reproducir y, si aplica, adjunta un Excel de muestra (anonimizado).
