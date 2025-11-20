@@ -545,9 +545,19 @@ if df is not None and not df.empty:
         
         if resumen_data:
             df_resumen = pd.DataFrame(resumen_data)
-            st.dataframe(df_resumen, use_container_width=True)
             
-            # Botón de descarga
+            # Crear una copia para mostrar con valores formateados
+            df_resumen_display = df_resumen.copy()
+            
+            # Formatear columnas monetarias para visualización
+            columnas_monetarias = ['Cartera Total', 'Por Vencer', 'Días 30', 'Días 60', 'Días 90', 'Días +90']
+            for col in columnas_monetarias:
+                if col in df_resumen_display.columns:
+                    df_resumen_display[col] = df_resumen_display[col].apply(format_currency)
+            
+            st.dataframe(df_resumen_display, use_container_width=True)
+            
+            # Botón de descarga (usar el DataFrame original con valores numéricos)
             csv = df_resumen.to_csv(index=False).encode('utf-8-sig')
             st.download_button(
                 label="📥 Descargar resumen como CSV",
