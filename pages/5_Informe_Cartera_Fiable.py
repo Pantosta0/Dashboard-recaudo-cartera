@@ -117,32 +117,63 @@ if df_financiero is not None:
     
     # Análisis por edades
     if 'EDADES' in df_financiero.columns:
-        # Función auxiliar para buscar valores de edad con variaciones
-        def get_capital_by_edad(pattern_list):
-            total = 0
-            for pattern in pattern_list:
-                mask = df_financiero['EDADES'].astype(str).str.contains(pattern, case=False, na=False)
-                if mask.any():
-                    total = df_financiero[mask]['Capital'].sum()
-                    break
-            return total
+        # Usar la misma lógica que se usa en el análisis por edades más abajo
+        # Primero agrupar por EDADES, luego normalizar (misma función normalize_edad)
+        edades_data = df_financiero.groupby('EDADES').agg({
+            'Capital': 'sum',
+            'Cuota': 'sum',
+            'Interes': 'sum'
+        }).reset_index()
         
-        por_vencer = get_capital_by_edad(['PorVencer', 'Por Vencer', 'PorVencer', 'por vencer'])
-        dias_30 = get_capital_by_edad(['^30$', '30 Días', '30 dias'])
-        dias_60 = get_capital_by_edad(['^60$', '60 Días', '60 dias'])
-        dias_90 = get_capital_by_edad(['^90$', '90 Días', '90 dias'])
-        mas_90 = get_capital_by_edad(['Mas90', 'Mas 90', 'Más 90', 'Mas de 90', 'Más de 90'])
+        # Función para normalizar nombres de edades (misma que se usa más abajo)
+        def normalize_edad(edad_str):
+            edad_str = str(edad_str).strip()
+            if 'PorVencer' in edad_str or 'Por Vencer' in edad_str or 'por vencer' in edad_str.lower():
+                return 'PorVencer'
+            elif edad_str == '+90' or edad_str.startswith('+90') or edad_str.startswith('+ 90'):
+                return 'Mas90'
+            elif 'Mas90' in edad_str or 'Mas 90' in edad_str or 'Más 90' in edad_str or 'Mas de 90' in edad_str or 'Más de 90' in edad_str:
+                return 'Mas90'
+            elif edad_str == '30' or '30' in edad_str:
+                return '30'
+            elif edad_str == '60' or '60' in edad_str:
+                return '60'
+            elif edad_str == '90' or '90' in edad_str:
+                return '90'
+            return edad_str
+        
+        # Normalizar edades
+        edades_data['EDADES_NORM'] = edades_data['EDADES'].apply(normalize_edad)
+        
+        # Agrupar por edades normalizadas y sumar
+        edades_agrupadas = edades_data.groupby('EDADES_NORM').agg({
+            'Capital': 'sum',
+            'Cuota': 'sum',
+            'Interes': 'sum'
+        }).reset_index()
+        
+        # Extraer valores por categoría
+        por_vencer = edades_agrupadas[edades_agrupadas['EDADES_NORM'] == 'PorVencer']['Capital'].sum() if len(edades_agrupadas[edades_agrupadas['EDADES_NORM'] == 'PorVencer']) > 0 else 0
+        dias_30 = edades_agrupadas[edades_agrupadas['EDADES_NORM'] == '30']['Capital'].sum() if len(edades_agrupadas[edades_agrupadas['EDADES_NORM'] == '30']) > 0 else 0
+        dias_60 = edades_agrupadas[edades_agrupadas['EDADES_NORM'] == '60']['Capital'].sum() if len(edades_agrupadas[edades_agrupadas['EDADES_NORM'] == '60']) > 0 else 0
+        dias_90 = edades_agrupadas[edades_agrupadas['EDADES_NORM'] == '90']['Capital'].sum() if len(edades_agrupadas[edades_agrupadas['EDADES_NORM'] == '90']) > 0 else 0
+        mas_90 = edades_agrupadas[edades_agrupadas['EDADES_NORM'] == 'Mas90']['Capital'].sum() if len(edades_agrupadas[edades_agrupadas['EDADES_NORM'] == 'Mas90']) > 0 else 0
     else:
         por_vencer = dias_30 = dias_60 = dias_90 = mas_90 = 0
     
     total_mora = dias_30 + dias_60 + dias_90 + mas_90
+    # Calcular todos los índices por edades
     indice_corriente = (por_vencer / total_capital * 100) if total_capital > 0 else 0
+    indice_30 = (dias_30 / total_capital * 100) if total_capital > 0 else 0
+    indice_60 = (dias_60 / total_capital * 100) if total_capital > 0 else 0
+    indice_90 = (dias_90 / total_capital * 100) if total_capital > 0 else 0
+    indice_mas_90 = (mas_90 / total_capital * 100) if total_capital > 0 else 0
     indice_mora = (total_mora / total_capital * 100) if total_capital > 0 else 0
 else:
     total_capital = total_cuota = total_interes = total_fianza = 0
     por_vencer = dias_30 = dias_60 = dias_90 = mas_90 = 0
     total_mora = 0
-    indice_corriente = indice_mora = 0
+    indice_corriente = indice_30 = indice_60 = indice_90 = indice_mas_90 = indice_mora = 0
 
 # Métricas de Cartera Proyectadas
 if df_proyectadas is not None:
@@ -166,6 +197,7 @@ else:
     total_colocada = total_saldo_capital = total_prestamo = num_creditos = 0
 
 # Mostrar métricas principales
+st.markdown("### 💰 Métricas Generales")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -184,17 +216,68 @@ with col2:
 
 with col3:
     st.metric(
-        "📈 Índice Corriente",
-        format_percentage(indice_corriente),
-        help="Porcentaje de cartera al día"
+        "💵 Interés Total",
+        format_currency(total_interes),
+        help="Total de intereses"
     )
 
 with col4:
     st.metric(
-        "⚠️ Índice Mora",
-        format_percentage(indice_mora),
-        help="Porcentaje de cartera en mora"
+        "🛡️ Fianza Total",
+        format_currency(total_fianza),
+        help="Total de fianza"
     )
+
+st.markdown("### 📊 Índices por Edades de Vencimiento")
+st.markdown("*Todos los índices suman el 100% del capital total*")
+
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+with col1:
+    st.metric(
+        "✅ Por Vencer",
+        format_percentage(indice_corriente),
+        help="Porcentaje de cartera al día"
+    )
+
+with col2:
+    st.metric(
+        "⚠️ 30 Días",
+        format_percentage(indice_30),
+        help="Porcentaje de cartera con 30 días de vencimiento"
+    )
+
+with col3:
+    st.metric(
+        "⚠️ 60 Días",
+        format_percentage(indice_60),
+        help="Porcentaje de cartera con 60 días de vencimiento"
+    )
+
+with col4:
+    st.metric(
+        "⚠️ 90 Días",
+        format_percentage(indice_90),
+        help="Porcentaje de cartera con 90 días de vencimiento"
+    )
+
+with col5:
+    st.metric(
+        "🔴 Más de 90",
+        format_percentage(indice_mas_90),
+        help="Porcentaje de cartera con más de 90 días de vencimiento"
+    )
+
+with col6:
+    st.metric(
+        "⚠️ Mora Total",
+        format_percentage(indice_mora),
+        help="Porcentaje total de cartera en mora (30+60+90+Mas90)"
+    )
+
+# Verificación: mostrar suma de índices
+suma_indices = indice_corriente + indice_30 + indice_60 + indice_90 + indice_mas_90
+st.caption(f"📊 **Suma de índices:** {format_percentage(suma_indices)} (debería ser 100%)")
 
 st.markdown("---")
 
@@ -214,14 +297,16 @@ if df_financiero is not None and 'EDADES' in df_financiero.columns:
         edad_str = str(edad_str).strip()
         if 'PorVencer' in edad_str or 'Por Vencer' in edad_str or 'por vencer' in edad_str.lower():
             return 'PorVencer'
+        elif edad_str == '+90' or edad_str.startswith('+90') or edad_str.startswith('+ 90'):
+            return 'Mas90'
+        elif 'Mas90' in edad_str or 'Mas 90' in edad_str or 'Más 90' in edad_str or 'Mas de 90' in edad_str or 'Más de 90' in edad_str:
+            return 'Mas90'
         elif edad_str == '30' or '30' in edad_str:
             return '30'
         elif edad_str == '60' or '60' in edad_str:
             return '60'
         elif edad_str == '90' or '90' in edad_str:
             return '90'
-        elif 'Mas90' in edad_str or 'Mas 90' in edad_str or 'Más 90' in edad_str or 'Mas de 90' in edad_str:
-            return 'Mas90'
         return edad_str
     
     # Normalizar edades
