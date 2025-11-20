@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import date, timedelta
 from pathlib import Path
 import sys
@@ -15,7 +16,6 @@ from data_loader import load_all_fiable_pipeline
 PIPELINE_STATES = [
     "CREADO",
     "APROBADO",
-    "LEGALIZADO",
     "RECHAZADO",
 ]
 
@@ -24,14 +24,13 @@ EXCLUDED_STATES = {"SOLICITADO", "EN ANALISIS", "EXCEPCIONADO", "REPROCESO", "PR
 STATE_COLORS = [
     "#3498db",
     "#2ecc71",
-    "#27ae60",
     "#e74c3c",
 ]
 
 
-def summarize_states(df):
+def summarize_states(df, state_col='ESTADO_AGRUPADO'):
     total_registros = len(df)
-    counts_raw = df['ESTADO_NORMALIZADO'].value_counts()
+    counts_raw = df[state_col].value_counts()
     cantidades = []
     porcentajes = []
 
@@ -114,6 +113,9 @@ if df_filtered.empty:
     st.warning("No hay registros que coincidan con los filtros seleccionados.")
     st.stop()
 
+df_filtered = df_filtered.copy()
+df_filtered['ESTADO_AGRUPADO'] = df_filtered['ESTADO_NORMALIZADO'].replace({'LEGALIZADO': 'APROBADO'})
+
 periodos_disponibles = sorted(df_filtered['MES_PERIODO'].dropna().unique(), reverse=True)
 
 if 'FECHA' in df_filtered.columns and df_filtered['FECHA'].notna().any():
@@ -193,23 +195,33 @@ else:
     summary_actual['Comparación'] = 0
     summary_actual['Variación'] = summary_actual['Cantidad']
 
+col_label_actual = f"Cantidad ({periodo_actual_label})" if periodo_actual_label else "Cantidad"
+col_label_comparacion = (
+    f"Cantidad ({periodo_comparacion_label})"
+    if periodo_comparacion_label else
+    "Comparación"
+)
+summary_display = summary_actual.rename(columns={'Cantidad': col_label_actual})
+if 'Comparación' in summary_display.columns:
+    summary_display = summary_display.rename(columns={'Comparación': col_label_comparacion})
+
 st.subheader("📊 Distribución por estado")
 col_total, col_delta = st.columns(2)
 col_total.metric("Total registros periodo", f"{int(total_actual):,}")
 if not df_comparacion.empty:
     delta_total = total_actual - total_comp
-    col_delta.metric("Variación total", f"{delta_total:+,}", f"{(delta_total / total_comp * 100):+.1f}%" if total_comp else None)
+    col_delta.metric("Variación total vs mes anterior", f"{delta_total:+,}", f"{(delta_total / total_comp * 100):+.1f}%" if total_comp else None)
 else:
-    col_delta.metric("Variación total", f"{total_actual:+,}", None)
+    col_delta.metric("Variación total vs mes anterior", f"{total_actual:+,}", None)
 
-st.dataframe(summary_actual, use_container_width=True)
+st.dataframe(summary_display, use_container_width=True)
 
-# Métrica de legalizados vs creados en el mes
-legalizados_periodo = (df_periodo['ESTADO_NORMALIZADO'] == 'LEGALIZADO').sum()
-pct_legalizado_periodo = (legalizados_periodo / len(df_periodo) * 100) if len(df_periodo) else 0
+# Métrica de aprobados (incluye legalizados) vs creados en el mes
+aprobados_periodo = (df_periodo['ESTADO_AGRUPADO'] == 'APROBADO').sum()
+pct_aprobado_periodo = (aprobados_periodo / len(df_periodo) * 100) if len(df_periodo) else 0
 col_leg_mes_1, col_leg_mes_2 = st.columns(2)
-col_leg_mes_1.metric("Legalizados (mes)", f"{legalizados_periodo:,}")
-col_leg_mes_2.metric("% Legalizados vs creados (mes)", f"{pct_legalizado_periodo:.1f}%")
+col_leg_mes_1.metric("Aprobados (mes)", f"{aprobados_periodo:,}")
+col_leg_mes_2.metric("% Aprobados vs creados (mes)", f"{pct_aprobado_periodo:.1f}%")
 
 fig_estados = px.bar(
     summary_actual.reset_index(),
@@ -251,38 +263,38 @@ if pd.notna(selected_year) and pd.notna(selected_month):
     col_ytd2.metric(f"YTD {int(selected_year - 1)}", f"{ytd_prev:,}")
     col_ytd3.metric("Δ % YTD", f"{delta_pct_total:+.1f}{'%' if ytd_prev else ''}")
 
-    legalizados_ytd = (df_ytd['ESTADO_NORMALIZADO'] == 'LEGALIZADO').sum()
-    legalizados_ytd_prev = (df_ytd_prev['ESTADO_NORMALIZADO'] == 'LEGALIZADO').sum()
-    pct_legalizado_ytd = (legalizados_ytd / ytd_actual * 100) if ytd_actual else 0
-    pct_legalizado_ytd_prev = (legalizados_ytd_prev / ytd_prev * 100) if ytd_prev else 0
-    delta_legalizados = legalizados_ytd - legalizados_ytd_prev
-    delta_pct_legalizados = pct_legalizado_ytd - pct_legalizado_ytd_prev
+    aprobados_ytd = (df_ytd['ESTADO_AGRUPADO'] == 'APROBADO').sum()
+    aprobados_ytd_prev = (df_ytd_prev['ESTADO_AGRUPADO'] == 'APROBADO').sum()
+    pct_aprobado_ytd = (aprobados_ytd / ytd_actual * 100) if ytd_actual else 0
+    pct_aprobado_ytd_prev = (aprobados_ytd_prev / ytd_prev * 100) if ytd_prev else 0
+    delta_aprobados = aprobados_ytd - aprobados_ytd_prev
+    delta_pct_aprobados = pct_aprobado_ytd - pct_aprobado_ytd_prev
 
     col_legal1, col_legal2, col_legal3 = st.columns(3)
     col_legal1.metric(
-        f"Legalizados YTD {int(selected_year)}",
-        f"{legalizados_ytd:,}",
-        f"{delta_legalizados:+,}"
+        f"Aprobados YTD {int(selected_year)}",
+        f"{aprobados_ytd:,}",
+        f"{delta_aprobados:+,}"
     )
-    col_legal2.metric(f"Legalizados YTD {int(selected_year - 1)}", f"{legalizados_ytd_prev:,}")
-    delta_pct_legalizados_count = (delta_legalizados / legalizados_ytd_prev * 100) if legalizados_ytd_prev else 0
-    col_legal3.metric("Δ Legalizados YTD", f"{delta_legalizados:+,}", f"{delta_pct_legalizados_count:+.1f}%")
+    col_legal2.metric(f"Aprobados YTD {int(selected_year - 1)}", f"{aprobados_ytd_prev:,}")
+    delta_pct_aprobados_count = (delta_aprobados / aprobados_ytd_prev * 100) if aprobados_ytd_prev else 0
+    col_legal3.metric("Δ Aprobados YTD", f"{delta_aprobados:+,}", f"{delta_pct_aprobados_count:+.1f}%")
 
     col_pct1, col_pct2, col_pct3 = st.columns(3)
     col_pct1.metric(
-        f"% Legalizados vs creados YTD {int(selected_year)}",
-        f"{pct_legalizado_ytd:.1f}%",
-        f"{delta_pct_legalizados:+.1f} pp"
+        f"% Aprobados vs creados YTD {int(selected_year)}",
+        f"{pct_aprobado_ytd:.1f}%",
+        f"{delta_pct_aprobados:+.1f} pp"
     )
-    col_pct2.metric(f"% Legalizados vs creados YTD {int(selected_year - 1)}", f"{pct_legalizado_ytd_prev:.1f}%")
-    col_pct3.metric("Δ puntos porcentuales", f"{delta_pct_legalizados:+.1f} pp")
+    col_pct2.metric(f"% Aprobados vs creados YTD {int(selected_year - 1)}", f"{pct_aprobado_ytd_prev:.1f}%")
+    col_pct3.metric("Δ puntos porcentuales", f"{delta_pct_aprobados:+.1f} pp")
 
 # Evolución mensual
 st.markdown("---")
 st.subheader("📈 Evolución mensual de créditos")
 monthly = (
     df_filtered.dropna(subset=['MES_PERIODO'])
-    .groupby(['MES_PERIODO', 'ESTADO_NORMALIZADO'])
+    .groupby(['MES_PERIODO', 'ESTADO_AGRUPADO'])
     .size()
     .reset_index(name='Cantidad')
 )
@@ -293,9 +305,9 @@ if not monthly.empty:
         .groupby('MES_PERIODO')
         .size()
         .reset_index(name='Cantidad')
-        .assign(ESTADO_NORMALIZADO='CREADO')
+        .assign(ESTADO_AGRUPADO='CREADO')
     )
-    monthly = monthly[monthly['ESTADO_NORMALIZADO'] != 'CREADO']
+    monthly = monthly[monthly['ESTADO_AGRUPADO'] != 'CREADO']
     monthly = pd.concat([monthly, monthly_totals], ignore_index=True)
 
     monthly['Mes'] = monthly['MES_PERIODO'].dt.strftime('%Y-%m')
@@ -303,17 +315,32 @@ if not monthly.empty:
         monthly,
         x='Mes',
         y='Cantidad',
-        color='ESTADO_NORMALIZADO',
+        color='ESTADO_AGRUPADO',
         markers=True,
         title="Tendencia mensual por estado"
     )
     fig_monthly.update_layout(xaxis={'categoryorder': 'category ascending'})
+
+    trend_data = monthly[monthly['ESTADO_AGRUPADO'] == 'APROBADO'].sort_values('MES_PERIODO')
+    if not trend_data.empty:
+        trend_data = trend_data.copy()
+        trend_data['Trend'] = trend_data['Cantidad'].rolling(window=3, min_periods=1).mean()
+        fig_monthly.add_trace(
+            go.Scatter(
+                x=trend_data['Mes'],
+                y=trend_data['Trend'],
+                mode='lines',
+                name='Tendencia Aprobados (media 3M)',
+                line=dict(color='#2ecc71', dash='dash'),
+            )
+        )
+
     st.plotly_chart(fig_monthly, use_container_width=True)
 
 # Tabla detallada
 st.markdown("---")
 st.subheader("📋 Registros filtrados")
-cols_display = ['FECHA', 'ESTADO_NORMALIZADO', 'CLIENTE', 'ASESOR', 'PRODUCTO', 'ESTACION', 'CONSECUTIVO', 'IDENTIFICACION']
+cols_display = ['FECHA', 'ESTADO_AGRUPADO', 'CLIENTE', 'ASESOR', 'PRODUCTO', 'ESTACION', 'CONSECUTIVO', 'IDENTIFICACION']
 cols_existing = [col for col in cols_display if col in df_filtered.columns]
 st.dataframe(df_filtered[cols_existing], use_container_width=True, height=400)
 

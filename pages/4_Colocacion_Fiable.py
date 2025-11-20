@@ -562,34 +562,65 @@ st.markdown("---")
 st.subheader("🏢 Centros de costo destacados")
 
 if "CENTRO_COSTO" in df_analysis.columns:
-    centro_summary = (
-        df_analysis.groupby("CENTRO_COSTO")
-        .agg(
-            Unidades=("TOTALFAC", lambda x: len(x) - (x < 0).sum() * 2),  # Restar 2 por cada negativo
-            Total_COP=("TOTALFAC", "sum"),  # Incluir todos (los negativos reducen el total)
+    def summarize_centros(df_source: pd.DataFrame) -> pd.DataFrame:
+        return (
+            df_source.groupby("CENTRO_COSTO")
+            .agg(
+                Unidades=("TOTALFAC", lambda x: len(x) - (x < 0).sum() * 2),
+                Total_COP=("TOTALFAC", "sum"),
+            )
+            .reset_index()
         )
-        .reset_index()
-    )
-    top_centro_unidades = centro_summary.sort_values("Unidades", ascending=False).head(10)
-    top_centro_cop = centro_summary.sort_values("Total_COP", ascending=False).head(10)
 
-    top_centro_unidades_fmt = top_centro_unidades.copy()
-    top_centro_unidades_fmt["Total_COP"] = top_centro_unidades_fmt["Total_COP"].apply(
-        lambda x: format_currency(x, decimals=2)
-    )
+    centro_summary_current = summarize_centros(df_analysis)
+    has_prev_centros = not df_ytd_prev.empty and "CENTRO_COSTO" in df_ytd_prev.columns
+    centro_summary_prev = summarize_centros(df_ytd_prev) if has_prev_centros else pd.DataFrame(columns=centro_summary_current.columns)
 
-    top_centro_cop_fmt = top_centro_cop.copy()
-    top_centro_cop_fmt["Total_COP"] = top_centro_cop_fmt["Total_COP"].apply(
-        lambda x: format_currency(x, decimals=2)
-    )
+    top_curr_units = centro_summary_current.sort_values("Unidades", ascending=False).head(10)
+    top_curr_money = centro_summary_current.sort_values("Total_COP", ascending=False).head(10)
 
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.caption("Top centros por unidades")
-        st.dataframe(top_centro_unidades_fmt, use_container_width=True, hide_index=True)
-    with col_right:
-        st.caption("Top centros por dinero")
-        st.dataframe(top_centro_cop_fmt, use_container_width=True, hide_index=True)
+    top_curr_units_fmt = top_curr_units.copy()
+    top_curr_units_fmt["Total_COP"] = top_curr_units_fmt["Total_COP"].apply(lambda x: format_currency(x, decimals=2))
+    top_curr_money_fmt = top_curr_money.copy()
+    top_curr_money_fmt["Total_COP"] = top_curr_money_fmt["Total_COP"].apply(lambda x: format_currency(x, decimals=2))
+
+    if has_prev_centros:
+        col_units_curr, col_units_prev = st.columns(2)
+    else:
+        col_units_curr = st.container()
+        col_units_prev = None
+
+    with col_units_curr:
+        st.caption(f"Top centros por unidades {selected_year}")
+        st.dataframe(top_curr_units_fmt, use_container_width=True, hide_index=True)
+
+    if has_prev_centros:
+        top_prev_units = centro_summary_prev.sort_values("Unidades", ascending=False).head(10)
+        top_prev_units_fmt = top_prev_units.copy()
+        top_prev_units_fmt["Total_COP"] = top_prev_units_fmt["Total_COP"].apply(lambda x: format_currency(x, decimals=2))
+        with col_units_prev:
+            st.caption(f"Top centros por unidades {selected_year - 1}")
+            st.dataframe(top_prev_units_fmt, use_container_width=True, hide_index=True)
+    else:
+        st.info("No hay datos de centros de costo para el año anterior con los filtros actuales.")
+
+    if has_prev_centros:
+        col_money_curr, col_money_prev = st.columns(2)
+    else:
+        col_money_curr = st.container()
+        col_money_prev = None
+
+    with col_money_curr:
+        st.caption(f"Top centros por dinero {selected_year}")
+        st.dataframe(top_curr_money_fmt, use_container_width=True, hide_index=True)
+
+    if has_prev_centros:
+        top_prev_money = centro_summary_prev.sort_values("Total_COP", ascending=False).head(10)
+        top_prev_money_fmt = top_prev_money.copy()
+        top_prev_money_fmt["Total_COP"] = top_prev_money_fmt["Total_COP"].apply(lambda x: format_currency(x, decimals=2))
+        with col_money_prev:
+            st.caption(f"Top centros por dinero {selected_year - 1}")
+            st.dataframe(top_prev_money_fmt, use_container_width=True, hide_index=True)
 else:
     st.info("El archivo no incluye `Centro Costo`, por lo que no es posible ranquearlo.")
 
