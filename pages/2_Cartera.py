@@ -761,6 +761,7 @@ if df is not None and not df.empty:
                             ("Días 90", f"Días 90 {periodo1_str}", f"Días 90 {periodo2_str}"),
                             ("Días +90", f"Días +90 {periodo1_str}", f"Días +90 {periodo2_str}"),
                         ]
+                        morosity_labels = {"Días 30", "Días 60", "Días 90", "Días +90"}
                         
                         indice_corriente_fields = [
                             ("Índice Corriente", f"Índice Corriente {periodo1_str} (%)", f"Índice Corriente {periodo2_str} (%)"),
@@ -790,7 +791,12 @@ if df is not None and not df.empty:
                                         valor1 = row.get(col1, 0) or 0
                                         valor2 = row.get(col2, 0) or 0
                                         delta = valor2 - valor1
-                                        st.metric(label, format_currency(valor2), delta=format_delta(delta))
+                                        st.metric(
+                                            label,
+                                            format_currency(valor2),
+                                            delta=format_delta(delta),
+                                            delta_color="inverse" if label in morosity_labels else "normal",
+                                        )
                                 
                                 st.markdown("**Índices (%)**")
                                 col_idx1, col_idx2 = st.columns(2)
