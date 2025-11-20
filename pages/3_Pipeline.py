@@ -21,11 +21,12 @@ PIPELINE_STATES = [
 
 EXCLUDED_STATES = {"SOLICITADO", "EN ANALISIS", "EXCEPCIONADO", "REPROCESO", "PRE-LEGALIZADO"}
 
-STATE_COLORS = [
-    "#3498db",
-    "#2ecc71",
-    "#e74c3c",
-]
+STATE_COLOR_MAP = {
+    "CREADO": "#3498db",
+    "APROBADO": "#2ecc71",
+    "RECHAZADO": "#e74c3c",
+}
+STATE_COLORS = list(STATE_COLOR_MAP.values())
 
 
 def summarize_states(df, state_col='ESTADO_AGRUPADO'):
@@ -223,14 +224,21 @@ col_leg_mes_1, col_leg_mes_2 = st.columns(2)
 col_leg_mes_1.metric("Aprobados (mes)", f"{aprobados_periodo:,}")
 col_leg_mes_2.metric("% Aprobados vs creados (mes)", f"{pct_aprobado_periodo:.1f}%")
 
+summary_chart = summary_actual.reset_index()
 fig_estados = px.bar(
-    summary_actual.reset_index(),
+    summary_chart,
     x='Estado',
     y='Cantidad',
     color='Estado',
-    color_discrete_sequence=STATE_COLORS,
+    color_discrete_map=STATE_COLOR_MAP,
+    text='Cantidad',
     title="Estados en el periodo seleccionado"
 )
+fig_estados.update_traces(
+    texttemplate='%{text:,}',
+    textposition='outside',
+)
+fig_estados.update_layout(uniformtext_minsize=12, uniformtext_mode='hide')
 st.plotly_chart(fig_estados, use_container_width=True)
 
 # YTD vs YTD previo
@@ -259,8 +267,8 @@ if pd.notna(selected_year) and pd.notna(selected_month):
     col_ytd1, col_ytd2, col_ytd3 = st.columns(3)
     delta_ytd = ytd_actual - ytd_prev
     delta_pct_total = (delta_ytd / ytd_prev * 100) if ytd_prev else 0
-    col_ytd1.metric(f"YTD {int(selected_year)}", f"{ytd_actual:,}", f"{delta_ytd:+,}")
-    col_ytd2.metric(f"YTD {int(selected_year - 1)}", f"{ytd_prev:,}")
+    col_ytd1.metric(f"Total creados YTD {int(selected_year)}", f"{ytd_actual:,}", f"{delta_ytd:+,}")
+    col_ytd2.metric(f"Total creados YTD {int(selected_year - 1)}", f"{ytd_prev:,}")
     col_ytd3.metric("Δ % YTD", f"{delta_pct_total:+.1f}{'%' if ytd_prev else ''}")
 
     aprobados_ytd = (df_ytd['ESTADO_AGRUPADO'] == 'APROBADO').sum()
@@ -316,6 +324,7 @@ if not monthly.empty:
         x='Mes',
         y='Cantidad',
         color='ESTADO_AGRUPADO',
+        color_discrete_map=STATE_COLOR_MAP,
         markers=True,
         title="Tendencia mensual por estado"
     )
@@ -331,7 +340,7 @@ if not monthly.empty:
                 y=trend_data['Trend'],
                 mode='lines',
                 name='Tendencia Aprobados (media 3M)',
-                line=dict(color='#2ecc71', dash='dash'),
+                line=dict(color='#8e44ad', dash='dash'),
             )
         )
 

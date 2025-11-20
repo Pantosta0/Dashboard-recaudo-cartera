@@ -583,31 +583,41 @@ if df is not None and not df.empty:
                 name='Corriente',
                 x=empresas_graf,
                 y=indices_corriente,
-                marker_color='#2ecc71'
+                marker_color='#2ecc71',
+                text=[f"{valor:.2f}%" for valor in indices_corriente],
+                textposition='inside'
             ))
             fig.add_trace(go.Bar(
                 name='Tipo B',
                 x=empresas_graf,
                 y=indices_b,
-                marker_color='#f1c40f'
+                marker_color='#f1c40f',
+                text=[f"{valor:.2f}%" for valor in indices_b],
+                textposition='inside'
             ))
             fig.add_trace(go.Bar(
                 name='Tipo C',
                 x=empresas_graf,
                 y=indices_c,
-                marker_color='#e67e22'
+                marker_color='#e67e22',
+                text=[f"{valor:.2f}%" for valor in indices_c],
+                textposition='inside'
             ))
             fig.add_trace(go.Bar(
                 name='Tipo D',
                 x=empresas_graf,
                 y=indices_d,
-                marker_color='#e74c3c'
+                marker_color='#e74c3c',
+                text=[f"{valor:.2f}%" for valor in indices_d],
+                textposition='inside'
             ))
             fig.add_trace(go.Bar(
                 name='Tipo E',
                 x=empresas_graf,
                 y=indices_e,
-                marker_color='#c0392b'
+                marker_color='#c0392b',
+                text=[f"{valor:.2f}%" for valor in indices_e],
+                textposition='inside'
             ))
             
             fig.update_layout(
@@ -669,18 +679,40 @@ if df is not None and not df.empty:
                         break
             
             if año1 and mes1 and año2 and mes2:
-                # Usar session state para mantener la comparación visible
-                comparison_key = f"comparison_{año1}_{mes1}_{año2}_{mes2}"
+                # Normalizar orden para comparar siempre periodo más antiguo vs más reciente
+                periodos_seleccionados = [
+                    {
+                        "año": año1,
+                        "mes": mes1,
+                        "label": periodo1_selected,
+                        "key": "p1",
+                    },
+                    {
+                        "año": año2,
+                        "mes": mes2,
+                        "label": periodo2_selected,
+                        "key": "p2",
+                    },
+                ]
+                periodos_ordenados = sorted(periodos_seleccionados, key=lambda p: (p["año"], p["mes"]))
+                periodo_base = periodos_ordenados[0]
+                periodo_comp = periodos_ordenados[1]
+                comparison_key = f"comparison_{periodos_ordenados[0]['año']}_{periodos_ordenados[0]['mes']}_{periodos_ordenados[1]['año']}_{periodos_ordenados[1]['mes']}"
                 
                 if st.button("🔄 Comparar Períodos", type="primary", key="btn_compare"):
                     with st.spinner("Cargando y comparando períodos..."):
-                        df1, df2, periodo1_str, periodo2_str = load_cartera_for_comparison(año1, mes1, año2, mes2)
-                        
+                        df1, df2, periodo1_str, periodo2_str = load_cartera_for_comparison(
+                            periodo_base["año"], periodo_base["mes"], periodo_comp["año"], periodo_comp["mes"]
+                        )
                         if df1 is not None and df2 is not None:
-                            comparison_df = compare_cartera_periods(df1, df2, periodo1_str, periodo2_str, clasificar_empresa_func=clasificar_empresa)
-                            
+                            comparison_df = compare_cartera_periods(
+                                df1,
+                                df2,
+                                periodo1_str,
+                                periodo2_str,
+                                clasificar_empresa_func=clasificar_empresa
+                            )
                             if comparison_df is not None and not comparison_df.empty:
-                                # Guardar en session state para que persista
                                 st.session_state[comparison_key] = {
                                     'df': comparison_df,
                                     'periodo1': periodo1_str,
@@ -697,8 +729,103 @@ if df is not None and not df.empty:
                     if comparison_df is not None and not comparison_df.empty:
                         st.markdown(f"### 📈 Comparación: {periodo1_str} vs {periodo2_str}")
                         
-                        # Mostrar tabla comparativa
-                        st.dataframe(comparison_df, use_container_width=True, height=400)
+                        # Mostrar tabla comparativa sin columnas de variación
+                        cols_to_hide = {'Variación Total', 'Variación %'}
+                        table_columns = [col for col in comparison_df.columns if col not in cols_to_hide]
+                        st.dataframe(
+                            comparison_df[table_columns],
+                            use_container_width=True,
+                            height=400
+                        )
+
+                        # Comparación detallada por cartera
+                        st.subheader("📂 Comparación detallada por cartera")
+                        
+                        def format_delta(value):
+                            if pd.isna(value) or value == 0:
+                                return None
+                            sign = "+" if value > 0 else "-"
+                            formatted = format_currency(abs(value))
+                            return f"{sign}{formatted}"
+                        
+                        def format_delta_pct(value):
+                            if pd.isna(value) or value == 0:
+                                return None
+                            return f"{value:+.2f} pp"
+                        
+                        metric_fields = [
+                            ("Cartera Total", f"Total {periodo1_str}", f"Total {periodo2_str}"),
+                            ("Por Vencer", f"Por Vencer {periodo1_str}", f"Por Vencer {periodo2_str}"),
+                            ("Días 30", f"Días 30 {periodo1_str}", f"Días 30 {periodo2_str}"),
+                            ("Días 60", f"Días 60 {periodo1_str}", f"Días 60 {periodo2_str}"),
+                            ("Días 90", f"Días 90 {periodo1_str}", f"Días 90 {periodo2_str}"),
+                            ("Días +90", f"Días +90 {periodo1_str}", f"Días +90 {periodo2_str}"),
+                        ]
+                        
+                        indice_corriente_fields = [
+                            ("Índice Corriente", f"Índice Corriente {periodo1_str} (%)", f"Índice Corriente {periodo2_str} (%)"),
+                        ]
+                        indice_mora_fields = [
+                            ("Índice Mora", f"Índice Mora {periodo1_str} (%)", f"Índice Mora {periodo2_str} (%)"),
+                            ("Índice Tipo B", f"Índice Tipo B {periodo1_str} (%)", f"Índice Tipo B {periodo2_str} (%)"),
+                            ("Índice Tipo C", f"Índice Tipo C {periodo1_str} (%)", f"Índice Tipo C {periodo2_str} (%)"),
+                            ("Índice Tipo D", f"Índice Tipo D {periodo1_str} (%)", f"Índice Tipo D {periodo2_str} (%)"),
+                            ("Índice Tipo E", f"Índice Tipo E {periodo1_str} (%)", f"Índice Tipo E {periodo2_str} (%)"),
+                        ]
+                        
+                        for _, row in comparison_df.iterrows():
+                            empresa = row['Empresa']
+                            with st.expander(f"📁 {empresa}", expanded=False):
+                                col_p1, col_p2 = st.columns(2)
+                                
+                                with col_p1:
+                                    st.markdown(f"**{periodo1_str}**")
+                                    for label, col1, _ in metric_fields:
+                                        valor = row.get(col1, 0) or 0
+                                        st.metric(label, format_currency(valor))
+                                
+                                with col_p2:
+                                    st.markdown(f"**{periodo2_str}**")
+                                    for label, col1, col2 in metric_fields:
+                                        valor1 = row.get(col1, 0) or 0
+                                        valor2 = row.get(col2, 0) or 0
+                                        delta = valor2 - valor1
+                                        st.metric(label, format_currency(valor2), delta=format_delta(delta))
+                                
+                                st.markdown("**Índices (%)**")
+                                col_idx1, col_idx2 = st.columns(2)
+                                with col_idx1:
+                                    for label, col1, _ in indice_corriente_fields:
+                                        valor = row.get(col1, 0) or 0
+                                        st.metric(f"{label} {periodo1_str}", f"{valor:.2f}%")
+                                with col_idx2:
+                                    for label, col1, col2 in indice_corriente_fields:
+                                        valor1 = row.get(col1, 0) or 0
+                                        valor2 = row.get(col2, 0) or 0
+                                        delta = valor2 - valor1
+                                        st.metric(
+                                            f"{label} {periodo2_str}",
+                                            f"{valor2:.2f}%",
+                                            delta=format_delta_pct(delta)
+                                        )
+
+                                st.markdown("**Índices de mora por tipo (%)**")
+                                col_mora1, col_mora2 = st.columns(2)
+                                with col_mora1:
+                                    for label, col1, _ in indice_mora_fields:
+                                        valor = row.get(col1, 0) or 0
+                                        st.metric(f"{label} {periodo1_str}", f"{valor:.2f}%")
+                                with col_mora2:
+                                    for label, col1, col2 in indice_mora_fields:
+                                        valor1 = row.get(col1, 0) or 0
+                                        valor2 = row.get(col2, 0) or 0
+                                        delta = valor2 - valor1
+                                        st.metric(
+                                            f"{label} {periodo2_str}",
+                                            f"{valor2:.2f}%",
+                                            delta=format_delta_pct(delta),
+                                            delta_color="inverse"
+                                        )
                         
                         # Gráfico de variación
                         col1, col2 = st.columns(2)

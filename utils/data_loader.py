@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 from pathlib import Path
 from datetime import datetime
+from collections.abc import Iterable
 import os
 import re
 import locale
@@ -53,18 +54,21 @@ for dir_path in [
     dir_path.mkdir(parents=True, exist_ok=True)
 
 
-def clear_all_cache_dirs():
+def clear_cache_dirs(cache_dirs: Iterable[Path]):
     """
-    Elimina todos los archivos y subdirectorios dentro de las carpetas de caché.
+    Elimina todos los archivos y subdirectorios dentro de una o varias carpetas de caché.
     Retorna (items_eliminados, errores) para mostrar feedback en la UI.
     """
-    removed_items = []
-    errors = []
+    removed_items: list[str] = []
+    errors: list[tuple[str, str]] = []
 
-    for cache_dir in CACHE_DIRS:
-        if not cache_dir.exists():
+    for cache_dir in cache_dirs:
+        if cache_dir is None:
             continue
-        for item in cache_dir.iterdir():
+        dir_path = Path(cache_dir)
+        if not dir_path.exists():
+            continue
+        for item in dir_path.iterdir():
             try:
                 if item.is_file():
                     item.unlink()
@@ -75,6 +79,13 @@ def clear_all_cache_dirs():
                 errors.append((str(item), str(exc)))
 
     return removed_items, errors
+
+
+def clear_all_cache_dirs():
+    """
+    Elimina todos los archivos y subdirectorios dentro de todas las carpetas de caché conocidas.
+    """
+    return clear_cache_dirs(CACHE_DIRS)
 
 def get_excel_files(directory, pattern="*.xlsx"):
     """Obtiene lista de archivos Excel en un directorio"""
@@ -783,6 +794,24 @@ def compare_cartera_periods(df1, df2, periodo1_str, periodo2_str, clasificar_emp
         if 'Cuenta' in df2.columns and 'Empresa' not in df2.columns:
             df2['Empresa'] = df2['Cuenta'].apply(clasificar_empresa_func)
     
+    # Configurar posibles nombres de columnas (algunas bases vienen con variaciones)
+    col_candidates = {
+        "total": ["Total Cuota", "Total cuota", "TotalCuota", "TOTAL CUOTA", "Total"],
+        "por_vencer": ["Por Vencer", "PorVencer", "POR_VENCER", "Por vencer", "POR VENCER"],
+        "dias30": ["Dias30", "Días 30", "Dias 30", "TREINTA_DIAS", "30Dias"],
+        "dias60": ["Dias60", "Días 60", "Dias 60", "SESENTA_DIAS", "60Dias"],
+        "dias90": ["Dias90", "Días 90", "Dias 90", "NOVENTA_DIAS", "90Dias"],
+        "dias_mas90": ["Dias Mas90", "Dias +90", "Días +90", "DiasMas90", "MAS_NOVENTA", "Mas de 90", "Mas_de_90"],
+    }
+
+    def sum_metric(df, key):
+        if df is None or df.empty:
+            return 0
+        for col_name in col_candidates.get(key, []):
+            if col_name in df.columns:
+                return df[col_name].sum()
+        return 0
+
     # Calcular métricas por empresa para ambos períodos
     empresas = set()
     if 'Empresa' in df1.columns:
@@ -797,20 +826,20 @@ def compare_cartera_periods(df1, df2, periodo1_str, periodo2_str, clasificar_emp
         df2_emp = df2[df2['Empresa'] == empresa] if 'Empresa' in df2.columns else pd.DataFrame()
         
         # Métricas período 1
-        total1 = df1_emp['Total Cuota'].sum() if 'Total Cuota' in df1_emp.columns and not df1_emp.empty else 0
-        por_vencer1 = df1_emp['Por Vencer'].sum() if 'Por Vencer' in df1_emp.columns and not df1_emp.empty else 0
-        dias30_1 = df1_emp['Dias30'].sum() if 'Dias30' in df1_emp.columns and not df1_emp.empty else 0
-        dias60_1 = df1_emp['Dias60'].sum() if 'Dias60' in df1_emp.columns and not df1_emp.empty else 0
-        dias90_1 = df1_emp['Dias90'].sum() if 'Dias90' in df1_emp.columns and not df1_emp.empty else 0
-        dias_mas90_1 = df1_emp['Dias Mas90'].sum() if 'Dias Mas90' in df1_emp.columns and not df1_emp.empty else 0
+        total1 = sum_metric(df1_emp, "total")
+        por_vencer1 = sum_metric(df1_emp, "por_vencer")
+        dias30_1 = sum_metric(df1_emp, "dias30")
+        dias60_1 = sum_metric(df1_emp, "dias60")
+        dias90_1 = sum_metric(df1_emp, "dias90")
+        dias_mas90_1 = sum_metric(df1_emp, "dias_mas90")
         
         # Métricas período 2
-        total2 = df2_emp['Total Cuota'].sum() if 'Total Cuota' in df2_emp.columns and not df2_emp.empty else 0
-        por_vencer2 = df2_emp['Por Vencer'].sum() if 'Por Vencer' in df2_emp.columns and not df2_emp.empty else 0
-        dias30_2 = df2_emp['Dias30'].sum() if 'Dias30' in df2_emp.columns and not df2_emp.empty else 0
-        dias60_2 = df2_emp['Dias60'].sum() if 'Dias60' in df2_emp.columns and not df2_emp.empty else 0
-        dias90_2 = df2_emp['Dias90'].sum() if 'Dias90' in df2_emp.columns and not df2_emp.empty else 0
-        dias_mas90_2 = df2_emp['Dias Mas90'].sum() if 'Dias Mas90' in df2_emp.columns and not df2_emp.empty else 0
+        total2 = sum_metric(df2_emp, "total")
+        por_vencer2 = sum_metric(df2_emp, "por_vencer")
+        dias30_2 = sum_metric(df2_emp, "dias30")
+        dias60_2 = sum_metric(df2_emp, "dias60")
+        dias90_2 = sum_metric(df2_emp, "dias90")
+        dias_mas90_2 = sum_metric(df2_emp, "dias_mas90")
         
         # Calcular variaciones
         var_total = total2 - total1
@@ -821,6 +850,14 @@ def compare_cartera_periods(df1, df2, periodo1_str, periodo2_str, clasificar_emp
         indice_corriente2 = (por_vencer2 / total2 * 100) if total2 > 0 else 0
         indice_mora1 = ((dias30_1 + dias60_1 + dias90_1 + dias_mas90_1) / total1 * 100) if total1 > 0 else 0
         indice_mora2 = ((dias30_2 + dias60_2 + dias90_2 + dias_mas90_2) / total2 * 100) if total2 > 0 else 0
+        indice_tipo_b1 = (dias30_1 / total1 * 100) if total1 > 0 else 0
+        indice_tipo_b2 = (dias30_2 / total2 * 100) if total2 > 0 else 0
+        indice_tipo_c1 = (dias60_1 / total1 * 100) if total1 > 0 else 0
+        indice_tipo_c2 = (dias60_2 / total2 * 100) if total2 > 0 else 0
+        indice_tipo_d1 = (dias90_1 / total1 * 100) if total1 > 0 else 0
+        indice_tipo_d2 = (dias90_2 / total2 * 100) if total2 > 0 else 0
+        indice_tipo_e1 = (dias_mas90_1 / total1 * 100) if total1 > 0 else 0
+        indice_tipo_e2 = (dias_mas90_2 / total2 * 100) if total2 > 0 else 0
         
         comparison_data.append({
             'Empresa': empresa,
@@ -832,6 +869,14 @@ def compare_cartera_periods(df1, df2, periodo1_str, periodo2_str, clasificar_emp
             f'Índice Corriente {periodo2_str} (%)': indice_corriente2,
             f'Índice Mora {periodo1_str} (%)': indice_mora1,
             f'Índice Mora {periodo2_str} (%)': indice_mora2,
+            f'Índice Tipo B {periodo1_str} (%)': indice_tipo_b1,
+            f'Índice Tipo B {periodo2_str} (%)': indice_tipo_b2,
+            f'Índice Tipo C {periodo1_str} (%)': indice_tipo_c1,
+            f'Índice Tipo C {periodo2_str} (%)': indice_tipo_c2,
+            f'Índice Tipo D {periodo1_str} (%)': indice_tipo_d1,
+            f'Índice Tipo D {periodo2_str} (%)': indice_tipo_d2,
+            f'Índice Tipo E {periodo1_str} (%)': indice_tipo_e1,
+            f'Índice Tipo E {periodo2_str} (%)': indice_tipo_e2,
             f'Por Vencer {periodo1_str}': por_vencer1,
             f'Por Vencer {periodo2_str}': por_vencer2,
             f'Días 30 {periodo1_str}': dias30_1,
