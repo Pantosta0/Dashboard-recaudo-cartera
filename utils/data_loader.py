@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 import re
 import locale
+import shutil
 
 # Configurar locale para español (meses en español)
 try:
@@ -23,10 +24,57 @@ RECAUDO_RAW_DIR = DATA_DIR / "recaudo" / "raw"
 RECAUDO_CACHE_DIR = DATA_DIR / "recaudo" / "cache"
 PIPELINE_RAW_DIR = DATA_DIR / "pipeline" / "raw"
 PIPELINE_CACHE_DIR = DATA_DIR / "pipeline" / "cache"
+COLOCACION_RAW_DIR = DATA_DIR / "colocacion" / "raw"
+COLOCACION_CACHE_DIR = DATA_DIR / "colocacion" / "cache"
+CARTERA_FIABLE_RAW_DIR = DATA_DIR / "cartera_fiable" / "raw"
+CARTERA_FIABLE_CACHE_DIR = DATA_DIR / "cartera_fiable" / "cache"
+
+CACHE_DIRS = [
+    CARTERA_CACHE_DIR,
+    RECAUDO_CACHE_DIR,
+    PIPELINE_CACHE_DIR,
+    COLOCACION_CACHE_DIR,
+    CARTERA_FIABLE_CACHE_DIR,
+]
 
 # Crear directorios si no existen
-for dir_path in [CARTERA_RAW_DIR, CARTERA_CACHE_DIR, RECAUDO_RAW_DIR, RECAUDO_CACHE_DIR, PIPELINE_RAW_DIR, PIPELINE_CACHE_DIR]:
+for dir_path in [
+    CARTERA_RAW_DIR,
+    CARTERA_CACHE_DIR,
+    RECAUDO_RAW_DIR,
+    RECAUDO_CACHE_DIR,
+    PIPELINE_RAW_DIR,
+    PIPELINE_CACHE_DIR,
+    COLOCACION_RAW_DIR,
+    COLOCACION_CACHE_DIR,
+    CARTERA_FIABLE_RAW_DIR,
+    CARTERA_FIABLE_CACHE_DIR,
+]:
     dir_path.mkdir(parents=True, exist_ok=True)
+
+
+def clear_all_cache_dirs():
+    """
+    Elimina todos los archivos y subdirectorios dentro de las carpetas de caché.
+    Retorna (items_eliminados, errores) para mostrar feedback en la UI.
+    """
+    removed_items = []
+    errors = []
+
+    for cache_dir in CACHE_DIRS:
+        if not cache_dir.exists():
+            continue
+        for item in cache_dir.iterdir():
+            try:
+                if item.is_file():
+                    item.unlink()
+                else:
+                    shutil.rmtree(item)
+                removed_items.append(str(item))
+            except Exception as exc:
+                errors.append((str(item), str(exc)))
+
+    return removed_items, errors
 
 def get_excel_files(directory, pattern="*.xlsx"):
     """Obtiene lista de archivos Excel en un directorio"""
@@ -251,6 +299,26 @@ def detect_fiable_pipeline_files():
 
     return sorted(files, key=lambda x: (x[1], x[2] if x[2] is not None else 0), reverse=True)
 
+
+def detect_colocacion_fiable_files():
+    """
+    Busca archivos para la página de Colocación Fiable.
+    Se esperan Excel ubicados en data/colocacion/raw (extensiones .xlsx o .xls).
+    Retorna lista de Path ordenada por fecha de modificación (reciente primero).
+    """
+    files = []
+    if not COLOCACION_RAW_DIR.exists():
+        return files
+
+    seen = set()
+    for pattern in ("*.xlsx", "*.xls"):
+        for file in get_excel_files(COLOCACION_RAW_DIR, pattern):
+            if file not in seen:
+                files.append(file)
+                seen.add(file)
+
+    return sorted(files, key=lambda x: x.stat().st_mtime, reverse=True)
+
 # Funciones de procesamiento específicas
 def process_cartera_data(df, deduplicate=True):
     """
@@ -472,6 +540,155 @@ def process_fiable_pipeline_data(df):
     return df
 
 
+def process_colocacion_fiable_data(df):
+    """
+    Limpia y estandariza la data de colocación Fiable.
+    - Normaliza nombres de columnas.
+    - Convierte montos monetarios a float.
+    - Calcula columnas auxiliares de fecha/periodo.
+    """
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.upper()
+        .str.replace('Á', 'A', regex=False)
+        .str.replace('É', 'E', regex=False)
+        .str.replace('Í', 'I', regex=False)
+        .str.replace('Ó', 'O', regex=False)
+        .str.replace('Ú', 'U', regex=False)
+        .str.replace('Ñ', 'N', regex=False)
+        .str.replace(r'[^\w]+', '_', regex=True)
+        .str.replace(r'__+', '_', regex=True)
+        .str.strip('_')
+    )
+
+    rename_map = {
+        'AÑO': 'ANIO',
+        'ANO': 'ANIO',
+        'NRO_FACTURA': 'NUMERO_FACTURA',
+        'MODALIDADVENTA': 'MODALIDAD_VENTA',
+        'FORMAPAGO': 'FORMA_PAGO',
+        'CODPRODUCTO': 'COD_PRODUCTO',
+        'PRESENPRODUCTO': 'PRESENTACION_PRODUCTO',
+        'TIPOPRODUCTO': 'TIPO_PRODUCTO',
+        'CONSECUTIVOINTERNO': 'CONSECUTIVO_INTERNO',
+        'TOTALARTICULO': 'TOTAL_ARTICULO',
+        'TOTALFAC': 'TOTALFAC',  # asegurar nombre consistente
+    }
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+    def _to_numeric(series):
+        return pd.to_numeric(
+            series.astype(str)
+            .str.replace('$', '', regex=False)
+            .str.replace(',', '', regex=False)
+            .str.replace(' ', '', regex=False)
+            .str.replace('%', '', regex=False),
+            errors='coerce'
+        )
+
+    numeric_columns = [
+        'SUBTOTAL',
+        'DESCUENTO_PRODUCTO',
+        'DESCUENTO_FINANCIERO',
+        'IVAFAC',
+        'INC',
+        'ANTICIPO',
+        'TOTALFAC',
+        'CANTIDAD',
+        'PRECIO',
+        'DESCUENTO_UNIDAD',
+        'IVA',
+        'TOTAL',
+        'TOTAL_ARTICULO',
+        'COSTO',
+    ]
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = _to_numeric(df[col])
+
+    if 'FECHA_DOCUMENTO' in df.columns:
+        df['FECHA_DOCUMENTO'] = pd.to_datetime(df['FECHA_DOCUMENTO'], errors='coerce')
+
+    if 'ANIO' not in df.columns:
+        if 'FECHA_DOCUMENTO' in df.columns:
+            df['ANIO'] = df['FECHA_DOCUMENTO'].dt.year.astype('Int64')
+    else:
+        df['ANIO'] = pd.to_numeric(df['ANIO'], errors='coerce').astype('Int64')
+
+    if 'MES' not in df.columns:
+        if 'FECHA_DOCUMENTO' in df.columns:
+            df['MES'] = df['FECHA_DOCUMENTO'].dt.month.astype('Int64')
+    else:
+        df['MES'] = pd.to_numeric(df['MES'], errors='coerce').astype('Int64')
+
+    if 'FECHA_DOCUMENTO' in df.columns:
+        df['PERIODO'] = df['FECHA_DOCUMENTO'].dt.to_period('M')
+        df['PERIODO_LABEL'] = df['FECHA_DOCUMENTO'].dt.strftime('%Y-%m')
+    elif {'ANIO', 'MES'}.issubset(df.columns):
+        df['PERIODO'] = pd.PeriodIndex(
+            year=df['ANIO'].fillna(0).astype(int),
+            month=df['MES'].fillna(1).astype(int),
+            freq='M',
+        )
+        df['PERIODO_LABEL'] = df['PERIODO'].astype(str)
+    else:
+        df['PERIODO'] = None
+        df['PERIODO_LABEL'] = None
+
+    month_names = {
+        1: "Enero",
+        2: "Febrero",
+        3: "Marzo",
+        4: "Abril",
+        5: "Mayo",
+        6: "Junio",
+        7: "Julio",
+        8: "Agosto",
+        9: "Septiembre",
+        10: "Octubre",
+        11: "Noviembre",
+        12: "Diciembre",
+    }
+    if 'MES' in df.columns:
+        df['MES_NOMBRE'] = df['MES'].apply(lambda x: month_names.get(int(x), None) if pd.notna(x) else None)
+    else:
+        df['MES_NOMBRE'] = None
+
+    return df
+
+
+def load_all_colocacion_fiable():
+    """
+    Carga todos los archivos ubicados en data/colocacion/raw,
+    aplicando caché por archivo y concatenando la información.
+    """
+    files = detect_colocacion_fiable_files()
+    if not files:
+        return None
+
+    dataframes = []
+    for file_path in files:
+        df = load_excel_with_cache(
+            file_path,
+            COLOCACION_CACHE_DIR,
+            processing_func=process_colocacion_fiable_data
+        )
+        if df is not None and not df.empty:
+            df = df.copy()
+            df['ARCHIVO_ORIGEN'] = file_path.name
+            dataframes.append(df)
+
+    if not dataframes:
+        return None
+
+    return pd.concat(dataframes, ignore_index=True)
+
+
 def load_all_fiable_pipeline():
     """
     Carga y combina todos los archivos de pipeline Fiable disponibles.
@@ -629,3 +846,144 @@ def compare_cartera_periods(df1, df2, periodo1_str, periodo2_str, clasificar_emp
     
     return pd.DataFrame(comparison_data)
 
+
+def process_cartera_colocada_fiable(df):
+    """Procesa los datos de Cartera Colocada FIABLE"""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    return df
+
+def process_cartera_financiero_fiable(df):
+    """Procesa los datos de Cartera Financiero X edades FIABLE"""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    # Convertir fechas
+    if 'Vencimiento' in df.columns:
+        df['Vencimiento'] = pd.to_datetime(df['Vencimiento'], errors='coerce')
+    # Convertir columnas numéricas
+    numeric_cols = ['Capital', 'Cuota', 'Interes', 'Fianza', 'abonofianza']
+    for col in numeric_cols:
+        if col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = pd.to_numeric(
+                    df[col].astype(str).str.replace(',', '', regex=False)
+                    .str.replace('$', '', regex=False).str.replace(' ', '', regex=False),
+                    errors='coerce'
+                ).fillna(0)
+    return df
+
+def process_cartera_proyectadas_fiable(df):
+    """Procesa los datos de Cartera Proyectadas FIABLE"""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+    # Convertir fechas
+    date_cols = ['Fecha_Factura', 'FechaProximaVencer', 'Vencimientofinal', 'fechaprimeracuota']
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    # Convertir columnas numéricas
+    numeric_cols = ['InteresVenci', 'Total', 'PorVencer', 'Treinta_Dias', 'Sesenta_Dias', 
+                  'Noventa_Dias', 'Mas_de_Noventa', 'Cuotaspendientes', 'DiasVencimiento']
+    for col in numeric_cols:
+        if col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                df[col] = pd.to_numeric(
+                    df[col].astype(str).str.replace(',', '', regex=False)
+                    .str.replace('$', '', regex=False).str.replace(' ', '', regex=False),
+                    errors='coerce'
+                ).fillna(0)
+    return df
+
+def load_cartera_fiable_files():
+    """
+    Carga los 3 archivos de cartera FIABLE usando caché en disco:
+    - Cartera Colocada FIABLE
+    - Cartera Financiero X edades FIABLE
+    - Cartera Proyectadas FIABLE
+    
+    Los archivos se buscan en: data/cartera_fiable/raw/
+    Los archivos se cachean en: data/cartera_fiable/cache/
+    
+    Retorna tupla (df_colocada, df_financiero, df_proyectadas) o (None, None, None) si hay error
+    """
+    # Buscar archivos en el directorio de cartera_fiable/raw
+    file_colocada = None
+    file_financiero = None
+    file_proyectadas = None
+    
+    # Buscar archivos en el directorio específico
+    if CARTERA_FIABLE_RAW_DIR.exists():
+        for file in CARTERA_FIABLE_RAW_DIR.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "colocada" in name_lower and "fiable" in name_lower:
+                file_colocada = file
+            elif "financiero" in name_lower and "edades" in name_lower and "fiable" in name_lower:
+                file_financiero = file
+            elif "proyectadas" in name_lower and "fiable" in name_lower:
+                file_proyectadas = file
+    
+    # Si no se encuentran en el directorio específico, buscar en el directorio raíz (compatibilidad)
+    root_dir = Path(".")
+    if not file_colocada:
+        for file in root_dir.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "colocada" in name_lower and "fiable" in name_lower:
+                file_colocada = file
+                break
+    
+    if not file_financiero:
+        for file in root_dir.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "financiero" in name_lower and "edades" in name_lower and "fiable" in name_lower:
+                file_financiero = file
+                break
+    
+    if not file_proyectadas:
+        for file in root_dir.glob("*.xlsx"):
+            name_lower = file.name.lower()
+            if "proyectadas" in name_lower and "fiable" in name_lower:
+                file_proyectadas = file
+                break
+    
+    # Cargar archivos usando caché
+    df_colocada = None
+    df_financiero = None
+    df_proyectadas = None
+    
+    if file_colocada:
+        try:
+            df_colocada = load_excel_with_cache(
+                file_colocada,
+                CARTERA_FIABLE_CACHE_DIR,
+                processing_func=process_cartera_colocada_fiable
+            )
+        except Exception as e:
+            st.warning(f"Error al cargar Cartera Colocada: {e}")
+    
+    if file_financiero:
+        try:
+            df_financiero = load_excel_with_cache(
+                file_financiero,
+                CARTERA_FIABLE_CACHE_DIR,
+                processing_func=process_cartera_financiero_fiable
+            )
+        except Exception as e:
+            st.warning(f"Error al cargar Cartera Financiero X edades: {e}")
+    
+    if file_proyectadas:
+        try:
+            df_proyectadas = load_excel_with_cache(
+                file_proyectadas,
+                CARTERA_FIABLE_CACHE_DIR,
+                processing_func=process_cartera_proyectadas_fiable
+            )
+        except Exception as e:
+            st.warning(f"Error al cargar Cartera Proyectadas: {e}")
+    
+    return df_colocada, df_financiero, df_proyectadas
