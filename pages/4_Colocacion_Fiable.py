@@ -263,7 +263,7 @@ if not df_month_prev_same_year.empty:
             color_discrete_sequence=["#3498db", "#95a5a6"],
         )
         fig_prev_units.update_layout(yaxis_tickformat=".0f", xaxis_tickformat=".0f", showlegend=False)
-        st.plotly_chart(fig_prev_units, use_container_width=True)
+        st.plotly_chart(fig_prev_units, width="stretch")
     with col_chart_prev2:
         fig_prev_total = px.bar(
             compare_prev_df,
@@ -275,7 +275,7 @@ if not df_month_prev_same_year.empty:
             color_discrete_sequence=["#2ecc71", "#95a5a6"],
         )
         fig_prev_total.update_layout(yaxis_tickformat=",", showlegend=False)
-        st.plotly_chart(fig_prev_total, use_container_width=True)
+        st.plotly_chart(fig_prev_total, width="stretch")
 else:
     st.info(f"No hay datos para {prev_month_label} con los filtros actuales.")
 
@@ -335,7 +335,7 @@ if not df_month_prev.empty:
             color_continuous_scale="Blues",
         )
         fig_month_units.update_layout(xaxis_tickformat=".0f", yaxis_tickformat=".0f")
-        st.plotly_chart(fig_month_units, use_container_width=True)
+        st.plotly_chart(fig_month_units, width="stretch")
     with col_chart2:
         fig_month_total = px.bar(
             compare_df,
@@ -347,7 +347,7 @@ if not df_month_prev.empty:
             color_continuous_scale="Greens",
         )
         fig_month_total.update_layout(yaxis_tickformat=",")
-        st.plotly_chart(fig_month_total, use_container_width=True)
+        st.plotly_chart(fig_month_total, width="stretch")
 else:
     st.info("No hay datos del mismo mes para el año anterior con los filtros actuales.")
 
@@ -463,7 +463,7 @@ else:
 
 # Asegurar que el eje X siempre muestre enteros
 fig_units.update_layout(xaxis_tickformat=".0f")
-st.plotly_chart(fig_units, use_container_width=True)
+st.plotly_chart(fig_units, width="stretch")
 
 # Mostrar tabla o métricas según el agrupamiento
 if group_col == "ANIO" and include_prev_month:
@@ -504,7 +504,7 @@ else:
     if "Total COP" in summary_display.columns:
         summary_display["Total COP"] = summary_display["Total COP"].apply(lambda x: format_currency(x, decimals=2))
     
-    st.dataframe(summary_display, use_container_width=True)
+    st.dataframe(summary_display, width="stretch")
 
 st.markdown("---")
 st.subheader("💵 Comparativo por valor (COP)")
@@ -556,7 +556,7 @@ else:
         color_continuous_scale="Greens",
     )
     fig_money.update_layout(yaxis_title=selected_dimension_label, xaxis_title="Total COP")
-st.plotly_chart(fig_money, use_container_width=True)
+st.plotly_chart(fig_money, width="stretch")
 
 st.markdown("---")
 st.subheader("🏢 Centros de costo destacados")
@@ -592,7 +592,7 @@ if "CENTRO_COSTO" in df_analysis.columns:
 
     with col_units_curr:
         st.caption(f"Top centros por unidades {selected_year}")
-        st.dataframe(top_curr_units_fmt, use_container_width=True, hide_index=True)
+        st.dataframe(top_curr_units_fmt, width="stretch", hide_index=True)
 
     if has_prev_centros:
         top_prev_units = centro_summary_prev.sort_values("Unidades", ascending=False).head(10)
@@ -600,7 +600,7 @@ if "CENTRO_COSTO" in df_analysis.columns:
         top_prev_units_fmt["Total_COP"] = top_prev_units_fmt["Total_COP"].apply(lambda x: format_currency(x, decimals=2))
         with col_units_prev:
             st.caption(f"Top centros por unidades {selected_year - 1}")
-            st.dataframe(top_prev_units_fmt, use_container_width=True, hide_index=True)
+            st.dataframe(top_prev_units_fmt, width="stretch", hide_index=True)
     else:
         st.info("No hay datos de centros de costo para el año anterior con los filtros actuales.")
 
@@ -612,7 +612,7 @@ if "CENTRO_COSTO" in df_analysis.columns:
 
     with col_money_curr:
         st.caption(f"Top centros por dinero {selected_year}")
-        st.dataframe(top_curr_money_fmt, use_container_width=True, hide_index=True)
+        st.dataframe(top_curr_money_fmt, width="stretch", hide_index=True)
 
     if has_prev_centros:
         top_prev_money = centro_summary_prev.sort_values("Total_COP", ascending=False).head(10)
@@ -620,7 +620,7 @@ if "CENTRO_COSTO" in df_analysis.columns:
         top_prev_money_fmt["Total_COP"] = top_prev_money_fmt["Total_COP"].apply(lambda x: format_currency(x, decimals=2))
         with col_money_prev:
             st.caption(f"Top centros por dinero {selected_year - 1}")
-            st.dataframe(top_prev_money_fmt, use_container_width=True, hide_index=True)
+            st.dataframe(top_prev_money_fmt, width="stretch", hide_index=True)
 else:
     st.info("El archivo no incluye `Centro Costo`, por lo que no es posible ranquearlo.")
 

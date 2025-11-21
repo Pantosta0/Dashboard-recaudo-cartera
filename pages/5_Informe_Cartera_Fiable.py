@@ -345,7 +345,7 @@ if df_financiero is not None and 'EDADES' in df_financiero.columns:
             yaxis_title="Capital ($)",
             height=400
         )
-        st.plotly_chart(fig_capital, use_container_width=True)
+        st.plotly_chart(fig_capital, width="stretch")
     
     with col2:
         # Gráfico de Cuota por Edades
@@ -363,7 +363,7 @@ if df_financiero is not None and 'EDADES' in df_financiero.columns:
             yaxis_title="Cuota ($)",
             height=400
         )
-        st.plotly_chart(fig_cuota, use_container_width=True)
+        st.plotly_chart(fig_cuota, width="stretch")
     
     # Tabla resumen por edades
     st.markdown("### 📋 Resumen por Edades")
@@ -372,7 +372,7 @@ if df_financiero is not None and 'EDADES' in df_financiero.columns:
     resumen_edades['Cuota'] = resumen_edades['Cuota'].apply(format_currency)
     resumen_edades['Interes'] = resumen_edades['Interes'].apply(format_currency)
     resumen_edades.columns = ['Edades', 'Capital', 'Cuota', 'Interés']
-    st.dataframe(resumen_edades, use_container_width=True, hide_index=True)
+    st.dataframe(resumen_edades, width="stretch", hide_index=True)
 
 # ========== ANÁLISIS DE CARTERA PROYECTADAS ==========
 if df_proyectadas is not None:
@@ -411,7 +411,7 @@ if df_proyectadas is not None:
             yaxis_title="Monto ($)",
             height=400
         )
-        st.plotly_chart(fig_proy, use_container_width=True)
+        st.plotly_chart(fig_proy, width="stretch")
     
     # Análisis por calificación
     if 'Calificacion' in df_proyectadas.columns:
@@ -438,7 +438,7 @@ if df_proyectadas is not None:
             yaxis_title="Total ($)",
             height=400
         )
-        st.plotly_chart(fig_calif, use_container_width=True)
+        st.plotly_chart(fig_calif, width="stretch")
 
 # ========== ANÁLISIS DE CARTERA COLOCADA ==========
 if df_colocada is not None:
@@ -482,9 +482,9 @@ if df_colocada is not None:
             height=400,
             xaxis_tickangle=-45
         )
-        st.plotly_chart(fig_producto, use_container_width=True)
+        st.plotly_chart(fig_producto, width="stretch")
         
-        st.dataframe(producto_data, use_container_width=True, hide_index=True)
+        st.dataframe(producto_data, width="stretch", hide_index=True)
     
     # Análisis por cuenta
     if 'NombreCuentaCartera' in df_colocada.columns:
@@ -511,7 +511,7 @@ if df_colocada is not None:
             height=500,
             xaxis_tickangle=-45
         )
-        st.plotly_chart(fig_cuenta, use_container_width=True)
+        st.plotly_chart(fig_cuenta, width="stretch")
 
 # ========== TABLA COMPARATIVA ==========
 st.markdown("---")
@@ -564,7 +564,7 @@ comparison_data = {
 }
 
 df_comparison = pd.DataFrame(comparison_data)
-st.dataframe(df_comparison, use_container_width=True, hide_index=True)
+st.dataframe(df_comparison, width="stretch", hide_index=True)
 
 # Botón de descarga
 csv = df_comparison.to_csv(index=False).encode('utf-8-sig')

@@ -61,7 +61,7 @@ page = st.navigation(pages)
 
 st.sidebar.markdown("---")
 current_page_title = getattr(page, "title", "esta página")
-if st.sidebar.button("🧹 Limpiar caché de esta página", use_container_width=True):
+if st.sidebar.button("🧹 Limpiar caché de esta página", width="stretch"):
     page_path, cache_dirs = _get_current_page_cache_dirs(page)
     if cache_dirs:
         removed, errors = clear_cache_dirs(cache_dirs)

@@ -215,7 +215,7 @@ if not df_comparacion.empty:
 else:
     col_delta.metric("Variación total vs mes anterior", f"{total_actual:+,}", None)
 
-st.dataframe(summary_display, use_container_width=True)
+st.dataframe(summary_display, width="stretch")
 
 # Métrica de aprobados (incluye legalizados) vs creados en el mes
 aprobados_periodo = (df_periodo['ESTADO_AGRUPADO'] == 'APROBADO').sum()
@@ -239,7 +239,7 @@ fig_estados.update_traces(
     textposition='outside',
 )
 fig_estados.update_layout(uniformtext_minsize=12, uniformtext_mode='hide')
-st.plotly_chart(fig_estados, use_container_width=True)
+st.plotly_chart(fig_estados, width="stretch")
 
 # YTD vs YTD previo
 if periodo_actual:
@@ -344,14 +344,14 @@ if not monthly.empty:
             )
         )
 
-    st.plotly_chart(fig_monthly, use_container_width=True)
+    st.plotly_chart(fig_monthly, width="stretch")
 
 # Tabla detallada
 st.markdown("---")
 st.subheader("📋 Registros filtrados")
 cols_display = ['FECHA', 'ESTADO_AGRUPADO', 'CLIENTE', 'ASESOR', 'PRODUCTO', 'ESTACION', 'CONSECUTIVO', 'IDENTIFICACION']
 cols_existing = [col for col in cols_display if col in df_filtered.columns]
-st.dataframe(df_filtered[cols_existing], use_container_width=True, height=400)
+st.dataframe(df_filtered[cols_existing], width="stretch", height=400)
 
 csv_download = df_filtered.to_csv(index=False).encode('utf-8-sig')
 st.download_button(

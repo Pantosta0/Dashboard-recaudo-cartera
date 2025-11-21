@@ -598,7 +598,7 @@ if df is not None and not df.empty:
                 if col in df_resumen_display.columns:
                     df_resumen_display[col] = df_resumen_display[col].apply(format_currency)
             
-            st.dataframe(df_resumen_display, use_container_width=True)
+            st.dataframe(df_resumen_display, width="stretch")
             
             # Botón de descarga (usar el DataFrame original con valores numéricos)
             csv = df_resumen.to_csv(index=False).encode('utf-8-sig')
@@ -682,7 +682,7 @@ if df is not None and not df.empty:
                 height=500
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         
         # Sección de Comparación Temporal
         st.markdown("---")
@@ -791,7 +791,7 @@ if df is not None and not df.empty:
                                 table_df[col] = table_df[col].apply(format_currency)
                         st.dataframe(
                             table_df,
-                            use_container_width=True,
+                            width="stretch",
                             height=400
                         )
 
@@ -915,7 +915,7 @@ if df is not None and not df.empty:
                                 xaxis_tickangle=-45,
                                 height=500
                             )
-                            st.plotly_chart(fig_var, use_container_width=True)
+                            st.plotly_chart(fig_var, width="stretch")
                         
                         with col2:
                             # Gráfico de variación porcentual
@@ -936,7 +936,7 @@ if df is not None and not df.empty:
                                 height=500
                             )
                             fig_var_pct.add_hline(y=0, line_dash="dash", line_color="gray")
-                            st.plotly_chart(fig_var_pct, use_container_width=True)
+                            st.plotly_chart(fig_var_pct, width="stretch")
                         
                         # Gráfico de índices comparativos
                         st.markdown("### 📊 Comparación de Índices")
@@ -973,7 +973,7 @@ if df is not None and not df.empty:
                             xaxis_tickangle=-45,
                             height=500
                         )
-                        st.plotly_chart(fig_indices_comp, use_container_width=True)
+                        st.plotly_chart(fig_indices_comp, width="stretch")
                         
                         # Botón de descarga
                         csv_comparison = comparison_df.to_csv(index=False).encode('utf-8-sig')
