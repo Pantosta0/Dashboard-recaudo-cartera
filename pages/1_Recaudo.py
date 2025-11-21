@@ -421,7 +421,7 @@ if df is not None and not df.empty:
                 color_discrete_sequence=colores[:len(categorias)]
             )
             fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig_pie, width="stretch")
     
     with col2:
         st.subheader("📊 Distribución por Fuente")
@@ -439,7 +439,7 @@ if df is not None and not df.empty:
                     color_continuous_scale='Blues'
                 )
                 fig_bar.update_layout(showlegend=False, xaxis_tickangle=-45)
-                st.plotly_chart(fig_bar, use_container_width=True)
+                st.plotly_chart(fig_bar, width="stretch")
             else:
                 st.info("No hay datos para mostrar")
         else:
@@ -462,7 +462,7 @@ if df is not None and not df.empty:
                 color_continuous_scale='Purples'
             )
             fig_zona.update_layout(showlegend=False)
-            st.plotly_chart(fig_zona, use_container_width=True)
+            st.plotly_chart(fig_zona, width="stretch")
     
     # Análisis por cliente
     st.markdown("---")
@@ -486,7 +486,7 @@ if df is not None and not df.empty:
                     color_continuous_scale='Greens'
                 )
                 fig_clientes.update_layout(showlegend=False)
-                st.plotly_chart(fig_clientes, use_container_width=True)
+                st.plotly_chart(fig_clientes, width="stretch")
     
     with col2:
         if 'CLIENTE' in df_filtered.columns and 'DIAS_VENCIDOS' in df_filtered.columns:
@@ -505,7 +505,7 @@ if df is not None and not df.empty:
                         color_continuous_scale='Reds'
                     )
                     fig_dias.update_layout(showlegend=False)
-                    st.plotly_chart(fig_dias, use_container_width=True)
+                    st.plotly_chart(fig_dias, width="stretch")
     
     # Análisis temporal
     st.markdown("---")
@@ -527,7 +527,7 @@ if df is not None and not df.empty:
                     markers=True
                 )
                 fig_temporal.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_temporal, use_container_width=True)
+                st.plotly_chart(fig_temporal, width="stretch")
     
     with col2:
         if 'FECHA_RECAUDO' in df_filtered.columns:
@@ -544,7 +544,7 @@ if df is not None and not df.empty:
                     line_shape='spline'
                 )
                 fig_recaudo.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_recaudo, use_container_width=True)
+                st.plotly_chart(fig_recaudo, width="stretch")
     
     # Distribución de días vencidos
     st.markdown("---")
@@ -562,7 +562,7 @@ if df is not None and not df.empty:
                 title="Distribución de Días Vencidos",
                 labels={'DIAS_VENCIDOS': 'Días Vencidos', 'count': 'Frecuencia'}
             )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, width="stretch")
         
         with col2:
             # Box plot de días vencidos
@@ -572,7 +572,7 @@ if df is not None and not df.empty:
                 title="Distribución de Días Vencidos (Box Plot)",
                 labels={'DIAS_VENCIDOS': 'Días Vencidos'}
             )
-            st.plotly_chart(fig_box, use_container_width=True)
+            st.plotly_chart(fig_box, width="stretch")
     
     # Tabla de datos
     st.markdown("---")
@@ -600,7 +600,7 @@ if df is not None and not df.empty:
         
         st.dataframe(
             df_display.iloc[start_idx:end_idx],
-            use_container_width=True,
+            width="stretch",
             height=400
         )
         
@@ -621,7 +621,7 @@ if df is not None and not df.empty:
     
     if 'DIAS_VENCIDOS' in df_filtered.columns and df_filtered['DIAS_VENCIDOS'].dtype in ['int64', 'float64']:
         stats = df_filtered['DIAS_VENCIDOS'].describe()
-        st.dataframe(stats.to_frame().T, use_container_width=True)
+        st.dataframe(stats.to_frame().T, width="stretch")
     
     # Resumen por fuente
     st.markdown("---")
@@ -642,7 +642,7 @@ if df is not None and not df.empty:
                 fuente_summary['Total_Por_Vencer'] = df_filtered.groupby('FUENTE')['POR_VENCER'].sum()
             
             st.write("**Resumen por FUENTE:**")
-            st.dataframe(fuente_summary, use_container_width=True)
+            st.dataframe(fuente_summary, width="stretch")
     
     with col2:
         if 'NOMBRE_FUENTE' in df_filtered.columns:
@@ -657,7 +657,7 @@ if df is not None and not df.empty:
                 nombre_fuente_summary['Total_Por_Vencer'] = df_filtered.groupby('NOMBRE_FUENTE')['POR_VENCER'].sum()
             
             st.write("**Resumen por NOMBRE_FUENTE:**")
-            st.dataframe(nombre_fuente_summary, use_container_width=True)
+            st.dataframe(nombre_fuente_summary, width="stretch")
     
     # Análisis comparativo FUENTE vs NOMBRE_FUENTE
     if 'FUENTE' in df_filtered.columns and 'NOMBRE_FUENTE' in df_filtered.columns:
@@ -674,9 +674,9 @@ if df is not None and not df.empty:
                 values='Cantidad',
                 title="Distribución: FUENTE → NOMBRE_FUENTE"
             )
-            st.plotly_chart(fig_comparativo, use_container_width=True)
+            st.plotly_chart(fig_comparativo, width="stretch")
             
-            st.dataframe(comparativo, use_container_width=True)
+            st.dataframe(comparativo, width="stretch")
 
 else:
     st.error("No se pudo cargar el archivo o está vacío. Por favor, verifica el archivo Test-recaudo.xlsx")
