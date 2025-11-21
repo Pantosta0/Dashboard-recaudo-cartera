@@ -13,6 +13,8 @@ if str(utils_path) not in sys.path:
     sys.path.insert(0, str(utils_path))
 
 from data_loader import load_cartera_fiable_files
+from context_builders import build_cartera_fiable_context
+from llm import render_llm_assistant
 
 # Título principal
 st.title("📊 Informe Integrado de Cartera FIABLE")
@@ -279,6 +281,25 @@ with col6:
 suma_indices = indice_corriente + indice_30 + indice_60 + indice_90 + indice_mas_90
 st.caption(f"📊 **Suma de índices:** {format_percentage(suma_indices)} (debería ser 100%)")
 
+st.markdown("---")
+
+# Asistente Gemini - Posicionado después de métricas para mayor visibilidad
+from context_builders import build_cartera_fiable_context
+context = build_cartera_fiable_context(
+    df_financiero=df_financiero,
+    df_proyectadas=df_proyectadas,
+    df_colocada=df_colocada,
+)
+render_llm_assistant(
+    "cartera_fiable",
+    context,
+    default_question="Genera un resumen ejecutivo del informe de cartera FIABLE.",
+    presets=[
+        "Analiza la salud de la cartera y niveles de mora.",
+        "Compara cartera financiero vs proyectadas vs colocada.",
+        "Identifica riesgos y recomendaciones prioritarias.",
+    ],
+)
 st.markdown("---")
 
 # ========== ANÁLISIS POR EDADES ==========

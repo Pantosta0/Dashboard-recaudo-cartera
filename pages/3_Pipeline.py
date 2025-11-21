@@ -12,6 +12,8 @@ if str(utils_path) not in sys.path:
     sys.path.insert(0, str(utils_path))
 
 from data_loader import load_all_fiable_pipeline
+from context_builders import build_pipeline_context
+from llm import render_llm_assistant
 
 PIPELINE_STATES = [
     "CREADO",
@@ -183,6 +185,31 @@ else:
 
 st.info(f"Analizando periodo: **{periodo_actual_label}**"
         f"{'' if not periodo_comparacion_label else f' vs {periodo_comparacion_label}'}")
+
+# Asistente Gemini - Posicionado después del periodo para mayor visibilidad
+from context_builders import build_pipeline_context
+context = build_pipeline_context(
+    df_periodo,
+    period_label=periodo_actual_label,
+    comparison_label=periodo_comparacion_label,
+    filters={
+        "estado": estado_filter or "Todos",
+        "asesor": asesor_filter or "Todos",
+        "estacion": estacion_filter or "Todos",
+        "producto": producto_filter or "Todos",
+    },
+)
+render_llm_assistant(
+    "pipeline",
+    context,
+    default_question="Genera un resumen ejecutivo del pipeline de créditos.",
+    presets=[
+        "¿Cuál es la tasa de aprobación y cómo se compara con periodos anteriores?",
+        "Identifica tendencias en los estados de crédito.",
+        "¿Qué asesores o estaciones tienen mejor desempeño?",
+    ],
+)
+st.markdown("---")
 
 summary_actual, total_actual = summarize_states(df_periodo)
 summary_actual = summary_actual.set_index('Estado')

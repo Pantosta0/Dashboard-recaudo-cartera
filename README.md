@@ -32,6 +32,23 @@ La aplicación abrirá el navegador por defecto. Usa `Ctrl+C` en la terminal par
 
 ---
 
+## Asistente Gemini (resúmenes y Q&A)
+
+El dashboard puede describir los datos visibles en cada página y responder preguntas usando Google Gemini.
+
+1. Instala las dependencias con `pip install -r requirements.txt` (incluye `google-generativeai`).
+2. Configura la clave en `.streamlit/secrets.toml`:
+
+   ```toml
+   GEMINI_API_KEY = "tu_clave_de_google_ai_studio"
+   # Opcional: GEMINI_MODEL = "gemini-1.5-flash"
+   ```
+
+3. Reinicia `streamlit run app.py`.
+4. Abre el panel **🤖 Asistente Gemini** en cualquier página para pedir un resumen o hacer preguntas. Usa el modo **Simulación** dentro del panel para probar sin consumir tokens.
+
+---
+
 ## Páginas y funcionalidades
 
 - **Recaudo (`pages/1_Recaudo.py`):**

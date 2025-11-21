@@ -10,6 +10,8 @@ if str(utils_path) not in sys.path:
     sys.path.insert(0, str(utils_path))
 
 from data_loader import load_all_colocacion_fiable
+from context_builders import build_colocacion_context
+from llm import render_llm_assistant
 
 MONTH_NAMES = {
     1: "Enero",
@@ -107,6 +109,7 @@ selected_month = st.sidebar.select_slider(
 )
 
 df_filtered = df.copy()
+centro_filter: list[str] = []
 
 if "CENTRO_COSTO" in df.columns:
     centro_options = sorted(df["CENTRO_COSTO"].dropna().unique().tolist())
@@ -114,24 +117,28 @@ if "CENTRO_COSTO" in df.columns:
     if centro_filter:
         df_filtered = df_filtered[df_filtered["CENTRO_COSTO"].isin(centro_filter)]
 
+vendedor_filter: list[str] = []
 if "VENDEDOR" in df.columns:
     vendedor_options = sorted(df["VENDEDOR"].dropna().unique().tolist())
     vendedor_filter = st.sidebar.multiselect("Vendedor", vendedor_options)
     if vendedor_filter:
         df_filtered = df_filtered[df_filtered["VENDEDOR"].isin(vendedor_filter)]
 
+modalidad_filter: list[str] = []
 if "MODALIDAD_VENTA" in df.columns:
     modalidad_options = sorted(df["MODALIDAD_VENTA"].dropna().unique().tolist())
     modalidad_filter = st.sidebar.multiselect("Modalidad de venta", modalidad_options)
     if modalidad_filter:
         df_filtered = df_filtered[df_filtered["MODALIDAD_VENTA"].isin(modalidad_filter)]
 
+bodega_filter: list[str] = []
 if "BODEGA" in df.columns:
     bodega_options = sorted(df["BODEGA"].dropna().unique().tolist())
     bodega_filter = st.sidebar.multiselect("Bodega", bodega_options)
     if bodega_filter:
         df_filtered = df_filtered[df_filtered["BODEGA"].isin(bodega_filter)]
 
+date_range = None
 if "FECHA_DOCUMENTO" in df.columns and df["FECHA_DOCUMENTO"].notna().any():
     min_date = df["FECHA_DOCUMENTO"].min().date()
     max_date = df["FECHA_DOCUMENTO"].max().date()
@@ -190,6 +197,33 @@ col1.metric("Unidades (registros)", f"{total_unidades:,}")
 col2.metric("Total COP", format_currency(total_cop, decimals=2))
 col3.metric("Ticket promedio", format_currency(ticket_promedio, decimals=2))
 
+st.markdown("---")
+
+# Asistente Gemini - Posicionado después de KPIs para mayor visibilidad
+from context_builders import build_colocacion_context
+context = build_colocacion_context(
+    df_ytd_current,
+    df_ytd_prev=df_ytd_prev if not df_ytd_prev.empty else None,
+    period_label=period_label,
+    filters={
+        "año": selected_year,
+        "mes": selected_month,
+        "centro_costo": centro_filter if "centro_filter" in locals() else None,
+        "vendedor": vendedor_filter if "vendedor_filter" in locals() else None,
+        "modalidad": modalidad_filter if "modalidad_filter" in locals() else None,
+        "bodega": bodega_filter if "bodega_filter" in locals() else None,
+    },
+)
+render_llm_assistant(
+    "colocacion",
+    context,
+    default_question="Genera un resumen ejecutivo de la colocación YTD.",
+    presets=[
+        "Compara el desempeño YTD con el año anterior.",
+        "Identifica los centros de costo o vendedores más destacados.",
+        "Analiza tendencias y oportunidades de mejora.",
+    ],
+)
 st.markdown("---")
 st.subheader("📅 Mes seleccionado vs mes anterior")
 

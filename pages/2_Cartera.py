@@ -20,6 +20,8 @@ from data_loader import (
     load_cartera_for_comparison,
     compare_cartera_periods
 )
+from context_builders import build_cartera_context
+from llm import render_llm_assistant
 
 # Título principal
 st.title("📊 Informe de Cartera")
@@ -411,6 +413,8 @@ if df is not None and not df.empty:
     if len(empresas_ordenadas) == 0:
         st.warning("No se encontraron empresas clasificadas en los datos.")
     else:
+        # Asistente Gemini - Posicionado antes de las tarjetas de empresas
+        from context_builders import build_cartera_context
         def obtener_metricas(df_empresa):
             total_cuota = df_empresa['Total Cuota'].sum() if 'Total Cuota' in df_empresa.columns else 0
             por_vencer = df_empresa['Por Vencer'].sum() if 'Por Vencer' in df_empresa.columns else 0
@@ -443,6 +447,25 @@ if df is not None and not df.empty:
                     ("Índice Tipo E", indice_e, "Tipo E"),
                 ],
             }
+        
+        # Construir contexto para el asistente
+        from context_builders import build_cartera_context
+        context = build_cartera_context(
+            df_filtered,
+            period_label=mes_selected,
+            filters={"mes": mes_selected, "empresas": empresas_ordenadas}
+        )
+        render_llm_assistant(
+            "cartera",
+            context,
+            default_question="Genera un resumen ejecutivo de la cartera por empresa.",
+            presets=[
+                "¿Cuáles son las empresas con mayor riesgo de mora?",
+                "Compara los índices de cartera entre empresas.",
+                "Identifica tendencias y alertas principales.",
+            ],
+        )
+        st.markdown("---")
         
         cards_per_row = 3 if len(empresas_ordenadas) >= 3 else len(empresas_ordenadas)
         cards_per_row = max(cards_per_row, 1)

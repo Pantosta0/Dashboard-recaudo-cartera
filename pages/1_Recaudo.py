@@ -19,6 +19,8 @@ from data_loader import (
     process_recaudo_data,
     RECAUDO_CACHE_DIR
 )
+from context_builders import build_recaudo_context
+from llm import render_llm_assistant
 
 # Título principal
 st.title("💰 Dashboard de Recaudo")
@@ -368,6 +370,39 @@ if df is not None and not df.empty:
         col6.metric("90+ Días", f"${total_90_plus:,.0f}")
     else:
         col6.metric("90+ Días", "N/A")
+    
+    st.markdown("---")
+    
+    # Asistente Gemini - Posicionado después de KPIs para mayor visibilidad
+    context = build_recaudo_context(
+        df_filtered,
+        period_label=mes_selected,
+        filters={
+            "fuente": fuente_selected,
+            "nombre_fuente": nombre_fuente_selected,
+            "zona": zona_selected,
+            "cliente": cliente_selected,
+            "fecha_recaudo": [str(fecha_range[0]), str(fecha_range[1])] if fecha_range and len(fecha_range) == 2 else None,
+        },
+        kpis={
+            "Total registros": total_registros,
+            "Total Recaudo": total_recaudo,
+            "Por Vencer": total_por_vencer,
+            "30 días": total_30,
+            "60 días": total_60,
+            "90+ días": total_90_plus,
+        },
+    )
+    render_llm_assistant(
+        "recaudo",
+        context,
+        default_question="Genera un resumen ejecutivo del recaudo filtrado.",
+        presets=[
+            "Dame un resumen rápido de montos y segmentos críticos.",
+            "¿Qué clientes o zonas requieren seguimiento prioritario?",
+            "Compara fuentes principales y menciona riesgos relevantes.",
+        ],
+    )
     
     st.markdown("---")
     
