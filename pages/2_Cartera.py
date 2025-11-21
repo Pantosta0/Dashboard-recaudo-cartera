@@ -123,9 +123,9 @@ def clasificar_empresa(cuenta):
         if cuenta_str == "130505011":
             return "Finaliados"
         
-        # AGM: 130505012
+        # AMG: 130505012
         if cuenta_str == "130505012":
-            return "AGM"
+            return "AMG"
         
         # Motofacil: 130505013
         if cuenta_str == "130505013":
@@ -398,7 +398,7 @@ if df is not None and not df.empty:
         "Soluciones Integrales",
         "Finaliados",
         "Grupo Estrategico",
-        "AGM",
+        "AMG",
         "Motofacil",
         "Motored",
         "Cartera Castigada",
@@ -499,6 +499,49 @@ if df is not None and not df.empty:
                         </div>
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
+        
+        # Tarjeta general con la sumatoria de todas las carteras (ubicada debajo de las demás)
+        total_metricas = obtener_metricas(df_filtered)
+        total_indice_cards_html = "".join(
+            [
+                f'<div class="indice-card" style="background-color: {get_color_indice(tipo)};">{label}: {valor:.2f}%</div>'
+                for label, valor, tipo in total_metricas["indices"]
+            ]
+        )
+        total_breakdown_data = [
+            ("Por Vencer", total_metricas["por_vencer"]),
+            ("Días 30", total_metricas["dias30"]),
+            ("Días 60", total_metricas["dias60"]),
+            ("Días 90", total_metricas["dias90"]),
+            ("Días +90", total_metricas["dias_mas90"]),
+        ]
+        total_breakdown_html = "".join(
+            [
+                f'<li><span>{label}</span><strong>{format_currency(valor)}</strong></li>'
+                for label, valor in total_breakdown_data
+            ]
+        )
+        total_card_html = f"""
+            <div class="company-card">
+                <div>
+                    <p class="company-title">🧮 Total de todas las carteras</p>
+                    <p class="company-subtitle">Cartera Total Actual</p>
+                    <p class="company-value">{format_currency(total_metricas["total"])}</p>
+                </div>
+                <div class="indice-grid">
+                    {total_indice_cards_html}
+                </div>
+                <div>
+                    <p class="breakdown-title">Desglose</p>
+                    <ul class="breakdown-list">
+                        {total_breakdown_html}
+                    </ul>
+                </div>
+            </div>
+        """
+        st.markdown("### Total de todas las carteras")
+        st.markdown(total_card_html, unsafe_allow_html=True)
+        st.markdown("")
         
         st.markdown("---")
         
@@ -742,8 +785,12 @@ if df is not None and not df.empty:
                         # Mostrar tabla comparativa sin columnas de variación
                         cols_to_hide = {'Variación Total', 'Variación %'}
                         table_columns = [col for col in comparison_df.columns if col not in cols_to_hide]
+                        table_df = comparison_df[table_columns].copy()
+                        for col in table_df.columns:
+                            if pd.api.types.is_numeric_dtype(table_df[col]) and "%" not in col:
+                                table_df[col] = table_df[col].apply(format_currency)
                         st.dataframe(
-                            comparison_df[table_columns],
+                            table_df,
                             use_container_width=True,
                             height=400
                         )
